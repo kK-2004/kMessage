@@ -1,0 +1,6 @@
+target/
+frontend/node_modules/
+data/
+.idea/
+*.iml
+.DS_Store

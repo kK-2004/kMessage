@@ -1,0 +1,19 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Single-module Maven application using Spring Boot 3.5.6+ and JDK 17+.
+  Shared dependency: com.kK-2004:kk-common:0.1.2 from GitHub Packages.
+  Reuse kk-common unified responses, exception handling, and RequestContext.
+  Keep kk-common Redis and Redisson auto-configurations disabled unless a feature explicitly requires them.
+  Java application packages use com.kk2004.kmessage.*.
+  Domain: Internal multi-channel message delivery platform.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

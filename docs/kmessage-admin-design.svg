@@ -1,0 +1,251 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1900" viewBox="0 0 2400 1900" role="img" aria-labelledby="title desc">
+  <title id="title">kMessage 管理后台页面设计稿</title>
+  <desc id="desc">基于当前项目页面功能描述生成的 SVG 设计稿，包含登录页、管理控制台、关键弹窗和移动端参考。</desc>
+  <defs>
+    <filter id="shadow-card" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+    <filter id="shadow-strong" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#101828" flood-opacity="0.20"/>
+    </filter>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4F7BFF"/>
+      <stop offset="1" stop-color="#315EFB"/>
+    </linearGradient>
+    <style>
+      .bg { fill: #F5F7FB; }
+      .card { fill: #FFFFFF; stroke: #E4E7EC; }
+      .muted-card { fill: #F8F9FC; stroke: #E4E7EC; }
+      .text { fill: #182033; font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; }
+      .muted { fill: #667085; font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; }
+      .primary { fill: #315EFB; font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; }
+      .mono { fill: #475467; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .h1 { font-size: 34px; font-weight: 800; letter-spacing: 0; }
+      .h2 { font-size: 22px; font-weight: 750; letter-spacing: 0; }
+      .h3 { font-size: 18px; font-weight: 700; letter-spacing: 0; }
+      .body { font-size: 14px; font-weight: 400; letter-spacing: 0; }
+      .caption { font-size: 12px; font-weight: 600; letter-spacing: 0; }
+      .eyebrow { fill: #315EFB; font-size: 12px; font-weight: 800; letter-spacing: 1.6px; }
+      .button-text { fill: #FFFFFF; font-size: 13px; font-weight: 700; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .outline-text { fill: #283560; font-size: 13px; font-weight: 700; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .danger-text { fill: #FFFFFF; font-size: 13px; font-weight: 700; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .label { fill: #344054; font-size: 12.5px; font-weight: 700; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .input { fill: #FFFFFF; stroke: #CBD2DF; }
+      .button { fill: #315EFB; }
+      .outline-button { fill: #FFFFFF; stroke: #CBD2DF; }
+      .danger-button { fill: #D92D20; }
+      .success-pill { fill: #ECFDF3; }
+      .success-text { fill: #067647; font-size: 12px; font-weight: 700; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .blue-pill { fill: #EFF4FF; }
+      .blue-text { fill: #315EFB; font-size: 12px; font-weight: 700; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .neutral-pill { fill: #EEF1F7; }
+      .neutral-text { fill: #667085; font-size: 12px; font-weight: 700; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .warning-panel { fill: #FFFAEB; stroke: #FEDF89; }
+      .warning-text { fill: #B54708; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+      .section-title { fill: #0F172A; font-size: 24px; font-weight: 800; font-family: Inter, "PingFang SC", Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="2400" height="1900" fill="#EEF1F7"/>
+
+  <!-- Header -->
+  <text x="56" y="58" class="section-title">kMessage 管理后台 SVG 设计稿</text>
+  <text x="56" y="88" class="muted body">由 docs/admin-pages-functional-description.md 生成。用于在 Figma 额度受限时直接预览页面结构与视觉方向。</text>
+  <text x="56" y="116" class="primary caption">主色 #315EFB · 背景 #F5F7FB · 卡片 #FFFFFF · 边框 #E4E7EC · 工作台型后台界面</text>
+
+  <!-- Login desktop -->
+  <g transform="translate(56 154)">
+    <text x="0" y="-20" class="section-title">01 登录页 / Desktop</text>
+    <rect width="720" height="520" rx="18" class="bg" filter="url(#shadow-card)"/>
+    <ellipse cx="120" cy="-10" rx="280" ry="150" fill="#DCE4FF" opacity="0.62"/>
+    <ellipse cx="660" cy="500" rx="230" ry="150" fill="#E7E0FF" opacity="0.64"/>
+    <rect x="190" y="92" width="340" height="330" rx="14" fill="#FFFFFF" filter="url(#shadow-strong)"/>
+    <rect x="220" y="124" width="40" height="40" rx="12" fill="url(#brand)"/>
+    <text x="240" y="151" text-anchor="middle" class="button-text" font-size="19">K</text>
+    <text x="274" y="141" class="text h3">kMessage</text>
+    <text x="274" y="162" class="muted caption">统一消息平台管理后台</text>
+    <text x="220" y="218" class="label">用户名</text>
+    <rect x="220" y="232" width="280" height="42" rx="8" class="input"/>
+    <text x="234" y="258" class="muted body">请输入用户名</text>
+    <text x="220" y="296" class="label">密码</text>
+    <rect x="220" y="310" width="280" height="42" rx="8" class="input"/>
+    <text x="234" y="336" class="muted body">请输入密码</text>
+    <rect x="220" y="374" width="280" height="42" rx="8" class="button"/>
+    <text x="360" y="400" text-anchor="middle" class="button-text">登录</text>
+    <text x="190" y="462" class="muted caption">状态：表单不完整时按钮禁用；提交时 loading；失败以 toast 提示。</text>
+  </g>
+
+  <!-- Admin desktop -->
+  <g transform="translate(820 154)">
+    <text x="0" y="-20" class="section-title">02 管理控制台 / Desktop</text>
+    <rect width="1440" height="820" rx="18" class="bg" filter="url(#shadow-card)"/>
+    <rect width="1440" height="64" rx="18" fill="#FFFFFF" stroke="#E4E7EC"/>
+    <rect x="40" y="13" width="38" height="38" rx="11" fill="url(#brand)"/>
+    <text x="59" y="39" text-anchor="middle" class="button-text" font-size="18">K</text>
+    <text x="92" y="29" class="text caption" font-size="16">kMessage</text>
+    <text x="92" y="47" class="muted caption">消息平台管理后台</text>
+    <rect x="1246" y="16" width="72" height="32" rx="8" class="button"/>
+    <text x="1282" y="37" text-anchor="middle" class="button-text">刷新</text>
+    <rect x="1330" y="16" width="72" height="32" rx="8" class="outline-button"/>
+    <text x="1366" y="37" text-anchor="middle" class="outline-text">退出</text>
+
+    <text x="120" y="118" class="eyebrow">CONSOLE</text>
+    <text x="120" y="158" class="text h1">管理消息发送身份与渠道</text>
+    <text x="120" y="188" class="muted body">创建业务应用、配置消息渠道，并控制应用可使用的渠道。</text>
+    <rect x="1028" y="106" width="128" height="78" rx="14" class="card"/>
+    <text x="1046" y="132" class="muted caption">业务应用</text>
+    <text x="1046" y="166" class="text h2">3</text>
+    <rect x="1170" y="106" width="128" height="78" rx="14" class="card"/>
+    <text x="1188" y="132" class="muted caption">渠道实例</text>
+    <text x="1188" y="166" class="text h2">5</text>
+
+    <rect x="120" y="226" width="1200" height="100" rx="10" class="warning-panel"/>
+    <text x="144" y="256" class="warning-text h3">请立即保存新凭据</text>
+    <text x="144" y="282" class="warning-text body">AppSecret 仅在本次展示，页面刷新后不再显示。</text>
+    <text x="144" y="310" class="warning-text caption">appKey</text>
+    <text x="218" y="310" class="mono caption">km_live_8f23••••••••••••8ae1</text>
+    <rect x="472" y="290" width="58" height="26" rx="8" class="outline-button"/>
+    <text x="501" y="308" text-anchor="middle" class="outline-text" font-size="12">复制</text>
+    <text x="582" y="310" class="warning-text caption">appSecret</text>
+    <text x="680" y="310" class="mono caption">ks_2Vw7••••••••••••••••yR</text>
+    <rect x="946" y="290" width="58" height="26" rx="8" class="outline-button"/>
+    <text x="975" y="308" text-anchor="middle" class="outline-text" font-size="12">复制</text>
+
+    <!-- Application panel -->
+    <g transform="translate(120 362)">
+      <rect width="580" height="392" rx="12" class="card" filter="url(#shadow-card)"/>
+      <text x="24" y="52" class="text h2">应用凭据</text>
+      <text x="24" y="78" class="muted body">每个业务应用使用独立 appKey 与 appSecret。</text>
+      <rect x="24" y="108" width="360" height="40" rx="8" class="input"/>
+      <text x="38" y="133" class="muted body">应用名称</text>
+      <rect x="396" y="108" width="136" height="40" rx="8" class="button"/>
+      <text x="464" y="133" text-anchor="middle" class="button-text">创建应用</text>
+      <rect x="24" y="176" width="532" height="170" rx="10" class="card"/>
+      <rect x="24" y="176" width="532" height="40" rx="10" fill="#F8F9FC"/>
+      <text x="42" y="202" class="muted caption">名称</text>
+      <text x="176" y="202" class="muted caption">appKey</text>
+      <text x="406" y="202" class="muted caption">操作</text>
+      <line x1="24" y1="216" x2="556" y2="216" stroke="#E4E7EC"/>
+      <text x="42" y="250" class="text caption">billing-service</text>
+      <text x="176" y="250" class="mono caption">km_live_8f23••••8ae1</text>
+      <rect x="370" y="230" width="74" height="30" rx="8" class="button"/><text x="407" y="250" text-anchor="middle" class="button-text" font-size="12">绑定渠道</text>
+      <rect x="452" y="230" width="50" height="30" rx="8" class="outline-button"/><text x="477" y="250" text-anchor="middle" class="outline-text" font-size="12">轮换</text>
+      <rect x="510" y="230" width="42" height="30" rx="8" class="danger-button"/><text x="531" y="250" text-anchor="middle" class="danger-text" font-size="12">删</text>
+      <line x1="24" y1="274" x2="556" y2="274" stroke="#E4E7EC"/>
+      <text x="42" y="308" class="text caption">ops-console</text>
+      <text x="176" y="308" class="mono caption">km_live_2b91••••771d</text>
+      <rect x="370" y="288" width="74" height="30" rx="8" class="button"/><text x="407" y="308" text-anchor="middle" class="button-text" font-size="12">绑定渠道</text>
+      <rect x="452" y="288" width="50" height="30" rx="8" class="outline-button"/><text x="477" y="308" text-anchor="middle" class="outline-text" font-size="12">轮换</text>
+      <rect x="510" y="288" width="42" height="30" rx="8" class="danger-button"/><text x="531" y="308" text-anchor="middle" class="danger-text" font-size="12">删</text>
+    </g>
+
+    <!-- Channel panel -->
+    <g transform="translate(740 362)">
+      <rect width="580" height="392" rx="12" class="card" filter="url(#shadow-card)"/>
+      <text x="24" y="52" class="text h2">渠道实例</text>
+      <text x="24" y="78" class="muted body">凭据通过环境变量引用，不在控制台展示明文。</text>
+      <text x="24" y="112" class="label">渠道名称</text>
+      <rect x="24" y="124" width="160" height="40" rx="8" class="input"/><text x="38" y="149" class="muted body">渠道名称</text>
+      <text x="198" y="112" class="label">渠道类型</text>
+      <rect x="198" y="124" width="150" height="40" rx="8" class="input"/><text x="212" y="149" class="text body">Telegram</text>
+      <text x="362" y="112" class="label">凭据引用</text>
+      <rect x="362" y="124" width="150" height="40" rx="8" class="input"/><text x="376" y="149" class="muted body">env:SECRET</text>
+      <rect x="424" y="184" width="108" height="38" rx="8" class="button"/><text x="478" y="208" text-anchor="middle" class="button-text">创建渠道</text>
+      <rect x="24" y="246" width="532" height="72" rx="10" fill="#EFF4FF" stroke="#B2CCFF"/>
+      <text x="42" y="274" class="blue-text" font-size="15">Telegram 接入指南</text>
+      <text x="42" y="298" class="muted body">配置 Bot Token 环境变量，拉取联系人后即可发送测试文本。</text>
+      <rect x="24" y="342" width="532" height="34" rx="10" fill="#F8F9FC" stroke="#E4E7EC"/>
+      <text x="42" y="364" class="muted caption">telegram-main</text>
+      <rect x="166" y="350" width="76" height="20" rx="10" class="blue-pill"/><text x="204" y="364" text-anchor="middle" class="blue-text">Telegram</text>
+      <rect x="254" y="350" width="50" height="20" rx="10" class="success-pill"/><text x="279" y="364" text-anchor="middle" class="success-text">启用</text>
+      <text x="318" y="364" class="mono caption">env:TELEGRAM...</text>
+      <rect x="452" y="346" width="58" height="26" rx="8" class="button"/><text x="481" y="364" text-anchor="middle" class="button-text" font-size="12">发消息</text>
+    </g>
+  </g>
+
+  <!-- Dialogs -->
+  <g transform="translate(56 760)">
+    <text x="0" y="-20" class="section-title">03 关键弹窗状态</text>
+    <rect width="1440" height="470" rx="18" class="bg" filter="url(#shadow-card)"/>
+    <g transform="translate(48 58)">
+      <rect width="400" height="350" rx="14" class="card" filter="url(#shadow-card)"/>
+      <text x="24" y="44" class="text h3">绑定渠道 — billing-service</text>
+      <text x="24" y="70" class="muted body">选择该应用可使用的渠道实例。</text>
+      <rect x="24" y="106" width="352" height="42" rx="8" class="input"/><text x="38" y="132" class="muted body">搜索并选择渠道...</text>
+      <rect x="36" y="172" width="156" height="28" rx="14" class="blue-pill"/><text x="114" y="191" text-anchor="middle" class="blue-text">telegram-main（Telegram）</text>
+      <rect x="36" y="214" width="128" height="28" rx="14" class="blue-pill"/><text x="100" y="233" text-anchor="middle" class="blue-text">feishu-alert（飞书）</text>
+      <text x="24" y="278" class="muted body">保存时自动计算新增授权与撤销授权。</text>
+      <rect x="216" y="296" width="74" height="38" rx="8" class="outline-button"/><text x="253" y="320" text-anchor="middle" class="outline-text">取消</text>
+      <rect x="302" y="296" width="74" height="38" rx="8" class="button"/><text x="339" y="320" text-anchor="middle" class="button-text">保存</text>
+    </g>
+
+    <g transform="translate(520 58)">
+      <rect width="400" height="350" rx="14" class="card" filter="url(#shadow-card)"/>
+      <text x="24" y="44" class="text h3">发送消息 — telegram-main</text>
+      <text x="24" y="70" class="muted body">选择联系人，或手动输入 target。</text>
+      <text x="24" y="112" class="label">channelInstanceId</text>
+      <text x="154" y="112" class="mono caption">ch_01HQ9D3J...</text>
+      <rect x="24" y="142" width="352" height="42" rx="8" class="input"/><text x="38" y="168" class="text body">订单告警群（GROUP）</text>
+      <text x="24" y="208" class="muted caption">共 24 个可选目标；失败时提示手动输入。</text>
+      <rect x="24" y="230" width="352" height="64" rx="8" class="input"/><text x="38" y="256" class="text body">测试消息</text>
+      <rect x="24" y="308" width="160" height="26" rx="10" class="success-pill"/><text x="104" y="326" text-anchor="middle" class="success-text">发送成功</text>
+      <rect x="216" y="300" width="74" height="38" rx="8" class="outline-button"/><text x="253" y="324" text-anchor="middle" class="outline-text">关闭</text>
+      <rect x="302" y="300" width="74" height="38" rx="8" class="button"/><text x="339" y="324" text-anchor="middle" class="button-text">发送</text>
+    </g>
+
+    <g transform="translate(992 58)">
+      <rect width="400" height="350" rx="14" class="card" filter="url(#shadow-card)"/>
+      <text x="24" y="44" class="text h3">编辑渠道 — feishu-alert</text>
+      <text x="24" y="70" class="muted body">修改名称、启用状态、凭据或高级配置。</text>
+      <text x="24" y="112" class="label">渠道名称</text>
+      <rect x="24" y="124" width="352" height="38" rx="8" class="input"/><text x="38" y="148" class="text body">feishu-alert</text>
+      <text x="24" y="190" class="label">启用状态</text>
+      <rect x="110" y="174" width="44" height="24" rx="12" fill="#315EFB"/><circle cx="142" cy="186" r="9" fill="#FFFFFF"/>
+      <text x="168" y="191" class="muted caption">启用</text>
+      <text x="24" y="230" class="label">高级配置 (configJson)</text>
+      <rect x="24" y="244" width="352" height="54" rx="8" class="input"/><text x="38" y="274" class="mono caption">{"receive_id_type":"user_id"}</text>
+      <rect x="216" y="310" width="74" height="38" rx="8" class="outline-button"/><text x="253" y="334" text-anchor="middle" class="outline-text">取消</text>
+      <rect x="302" y="310" width="74" height="38" rx="8" class="button"/><text x="339" y="334" text-anchor="middle" class="button-text">保存</text>
+    </g>
+  </g>
+
+  <!-- Mobile references -->
+  <g transform="translate(1538 760)">
+    <text x="0" y="-20" class="section-title">04 移动端参考</text>
+    <rect width="806" height="1010" rx="18" class="bg" filter="url(#shadow-card)"/>
+    <g transform="translate(44 58)">
+      <rect width="340" height="760" rx="30" fill="#F5F7FB" stroke="#D0D5DD"/>
+      <ellipse cx="110" cy="0" rx="220" ry="120" fill="#DCE4FF" opacity="0.58"/>
+      <rect x="24" y="235" width="292" height="310" rx="14" fill="#FFFFFF" filter="url(#shadow-card)"/>
+      <rect x="48" y="264" width="38" height="38" rx="11" fill="url(#brand)"/>
+      <text x="67" y="290" text-anchor="middle" class="button-text">K</text>
+      <text x="98" y="281" class="text h3">kMessage</text>
+      <text x="98" y="302" class="muted caption">统一消息平台管理后台</text>
+      <rect x="48" y="350" width="244" height="40" rx="8" class="input"/><text x="62" y="375" class="muted body">请输入用户名</text>
+      <rect x="48" y="424" width="244" height="40" rx="8" class="input"/><text x="62" y="449" class="muted body">请输入密码</text>
+      <rect x="48" y="498" width="244" height="42" rx="8" class="button"/><text x="170" y="524" text-anchor="middle" class="button-text">登录</text>
+    </g>
+    <g transform="translate(424 58)">
+      <rect width="340" height="860" rx="30" fill="#F5F7FB" stroke="#D0D5DD"/>
+      <rect width="340" height="64" rx="30" fill="#FFFFFF" stroke="#E4E7EC"/>
+      <rect x="16" y="15" width="34" height="34" rx="10" fill="url(#brand)"/><text x="33" y="38" text-anchor="middle" class="button-text">K</text>
+      <text x="62" y="28" class="text caption">kMessage</text><text x="62" y="46" class="muted caption">管理后台</text>
+      <text x="18" y="112" class="text h2">管理消息发送身份与渠道</text>
+      <text x="18" y="142" class="muted body">创建应用、配置渠道，并控制授权。</text>
+      <rect x="18" y="178" width="144" height="70" rx="12" class="card"/><text x="32" y="204" class="muted caption">业务应用</text><text x="32" y="236" class="text h2">3</text>
+      <rect x="178" y="178" width="144" height="70" rx="12" class="card"/><text x="192" y="204" class="muted caption">渠道实例</text><text x="192" y="236" class="text h2">5</text>
+      <rect x="18" y="276" width="304" height="230" rx="12" class="card"/>
+      <text x="36" y="312" class="text h3">应用凭据</text>
+      <rect x="36" y="334" width="184" height="38" rx="8" class="input"/><text x="50" y="358" class="muted body">应用名称</text>
+      <rect x="228" y="334" width="76" height="38" rx="8" class="button"/><text x="266" y="358" text-anchor="middle" class="button-text">创建</text>
+      <text x="36" y="420" class="text caption">billing-service</text><text x="36" y="444" class="mono caption">km_live_8f23••••8ae1</text>
+      <rect x="212" y="408" width="84" height="32" rx="8" class="button"/><text x="254" y="429" text-anchor="middle" class="button-text" font-size="12">绑定渠道</text>
+      <rect x="18" y="530" width="304" height="260" rx="12" class="card"/>
+      <text x="36" y="566" class="text h3">渠道实例</text>
+      <rect x="36" y="590" width="268" height="38" rx="8" class="input"/><text x="50" y="614" class="muted body">渠道名称</text>
+      <rect x="36" y="642" width="126" height="38" rx="8" class="input"/><text x="50" y="666" class="text body">Telegram</text>
+      <rect x="178" y="642" width="126" height="38" rx="8" class="input"/><text x="192" y="666" class="muted body">env:SECRET</text>
+      <rect x="36" y="696" width="268" height="40" rx="8" class="button"/><text x="170" y="721" text-anchor="middle" class="button-text">创建渠道</text>
+    </g>
+  </g>
+</svg>

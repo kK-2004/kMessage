@@ -1,0 +1,50 @@
+server:
+  port: 8002
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+spring:
+  application:
+    name: kmessage
+  main:
+    # kk-common 0.1.2 exposes requestContextFilter with the same bean name as Boot 3.5.x.
+    allow-bean-definition-overriding: true
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/kmessage;MODE=PostgreSQL;AUTO_SERVER=TRUE}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+kk:
+  common:
+    web:
+      enabled: true
+    exception:
+      enabled: false
+    redis:
+      enabled: false
+    redisson:
+      enabled: false
+
+kmessage:
+  runtime-role: ${KMESSAGE_RUNTIME_ROLE:all}
+  admin:
+    username: ${KMESSAGE_ADMIN_USERNAME:admin}
+    password: ${KMESSAGE_ADMIN_PASSWORD:admin}
+  worker:
+    poll-delay-ms: ${KMESSAGE_WORKER_POLL_DELAY_MS:1000}
+    lease-seconds: ${KMESSAGE_WORKER_LEASE_SECONDS:60}
+    max-attempts: ${KMESSAGE_WORKER_MAX_ATTEMPTS:5}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
