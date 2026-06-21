@@ -25,6 +25,9 @@ export const adminApi = {
   getSession() {
     return adminRequest("/session");
   },
+  getStats() {
+    return adminRequest("/stats");
+  },
   login(credentials) {
     return adminRequest("/session/login", {
       method: "POST",

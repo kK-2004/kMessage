@@ -7,6 +7,7 @@ import ChangePasswordDialog from "../components/admin/ChangePasswordDialog.vue";
 import ChannelPanel from "../components/admin/ChannelPanel.vue";
 import ConsoleHero from "../components/admin/ConsoleHero.vue";
 import SecretAlert from "../components/admin/SecretAlert.vue";
+import StatsDashboard from "../components/admin/StatsDashboard.vue";
 import UserGroupPanel from "../components/admin/UserGroupPanel.vue";
 
 const props = defineProps({
@@ -16,6 +17,7 @@ const props = defineProps({
   channelTypes: { type: Array, default: () => [] },
   secret: { type: Object, default: null },
   adminUsername: { type: String, default: "" },
+  stats: { type: Object, default: null },
   applicationForm: { type: Object, required: true },
   channelForm: { type: Object, required: true },
   selectedChannelType: { type: Object, default: null },
@@ -42,8 +44,8 @@ const currentPage = computed(() => {
   if (activePage.value === "application-groups") {
     return {
       id: "application-groups",
-      label: activeApplication.value ? `${activeApplication.value.name} / 用户分组` : "用户分组",
-      eyebrow: "Groups",
+      label: activeApplication.value ? activeApplication.value.name : "用户分组",
+      eyebrow: "应用 / 用户分组",
     };
   }
   return pages.find((page) => page.id === activePage.value) || pages[0];
@@ -174,6 +176,8 @@ const emit = defineEmits([
               :unavailable-type-count="unavailableTypeCount"
             />
 
+            <StatsDashboard :stats="stats" />
+
             <div class="overview-board">
               <article class="overview-panel">
                 <div class="overview-panel-head">
@@ -259,7 +263,7 @@ const emit = defineEmits([
               :selected-channel-type="selectedChannelType"
               :channel-label="channelLabel"
               @create="$emit('create-channel')"
-              @edit="(channel, payload) => $emit('edit-channel', channel, payload)"
+              @edit="(channelId, payload) => $emit('edit-channel', channelId, payload)"
               @delete="$emit('delete-channel', $event)"
               @users-imported="userImportRevision += 1"
             />

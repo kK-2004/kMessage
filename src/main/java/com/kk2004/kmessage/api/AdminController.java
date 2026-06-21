@@ -12,6 +12,8 @@ import com.kk2004.kmessage.domain.DeliveryResult;
 import com.kk2004.kmessage.domain.Entities;
 import com.kk2004.kmessage.persistence.GrantRepository;
 import com.kk2004.kmessage.security.AppCredentialService;
+import com.kk2004.kmessage.stats.StatsService;
+import com.kk2004.kmessage.stats.StatsView;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -23,12 +25,14 @@ public class AdminController {
     private final ChannelAdapterRegistry adapterRegistry;
     private final GrantRepository grants;
     private final UserGroupService userGroups;
+    private final StatsService stats;
     public AdminController(AppCredentialService credentials, ChannelService channels,
                            ChannelAdapterRegistry adapterRegistry, GrantRepository grants,
-                           UserGroupService userGroups) {
+                           UserGroupService userGroups, StatsService stats) {
         this.credentials = credentials; this.channels = channels;
         this.adapterRegistry = adapterRegistry; this.grants = grants;
         this.userGroups = userGroups;
+        this.stats = stats;
     }
 
     @PostMapping("/applications")
@@ -74,6 +78,10 @@ public class AdminController {
                 .map(t -> new ChannelTypeView(t.name(), t.getLabel(), t.getCredentialHint(),
                         t.getDescription(), t.getSetupGuide(), t.getTargetHint(), t.implemented()))
                 .toList());
+    }
+    @GetMapping("/stats")
+    public TransDTO<StatsView> stats() {
+        return TransDTO.success(stats.load());
     }
     @PutMapping("/applications/{applicationId}/channels/{channelId}")
     public TransDTO<Void> grant(@PathVariable String applicationId, @PathVariable String channelId) {

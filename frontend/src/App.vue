@@ -14,6 +14,7 @@ const {
   channelTypes,
   secret,
   adminUsername,
+  stats,
   loginForm,
   applicationForm,
   channelForm,
@@ -53,6 +54,7 @@ onMounted(checkSession);
     :channel-types="channelTypes"
     :secret="secret"
     :admin-username="adminUsername"
+    :stats="stats"
     :application-form="applicationForm"
     :channel-form="channelForm"
     :selected-channel-type="selectedChannelType"

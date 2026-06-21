@@ -293,7 +293,7 @@ function submitEdit() {
     configJson: editForm.configJson,
   };
   if (editForm.credentialRef.trim()) payload.credentialRef = editForm.credentialRef.trim();
-  emit("edit", editChannelRef.value, payload);
+  emit("edit", editChannelRef.value.id, payload);
   editDialogOpen.value = false;
 }
 </script>

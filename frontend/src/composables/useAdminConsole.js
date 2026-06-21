@@ -11,6 +11,7 @@ export function useAdminConsole() {
   const channelTypes = ref([]);
   const secret = ref(null);
   const adminUsername = ref("");
+  const stats = ref(null);
   const toast = useTDesignToast();
 
   const loginForm = reactive({ username: "", password: "" });
@@ -47,14 +48,16 @@ export function useAdminConsole() {
   async function loadData() {
     loading.value = true;
     try {
-      const [applicationData, channelData, typeData] = await Promise.all([
+      const [applicationData, channelData, typeData, statsData] = await Promise.all([
         adminApi.listApplications(),
         adminApi.listChannels(),
         channelTypes.value.length ? Promise.resolve(channelTypes.value) : adminApi.listChannelTypes(),
+        adminApi.getStats(),
       ]);
       applications.value = applicationData;
       channels.value = channelData;
       channelTypes.value = typeData;
+      stats.value = statsData;
     } catch (error) {
       handleUnauthorized(error);
       notify(error.message, "destructive");
@@ -97,6 +100,7 @@ export function useAdminConsole() {
     authenticated.value = false;
     adminUsername.value = "";
     secret.value = null;
+    stats.value = null;
   }
 
   async function changePassword(payload) {
@@ -211,6 +215,7 @@ export function useAdminConsole() {
     channelTypes,
     secret,
     adminUsername,
+    stats,
     loginForm,
     applicationForm,
     channelForm,

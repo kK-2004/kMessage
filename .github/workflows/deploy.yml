@@ -1,0 +1,150 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      IMAGE_NAME: kmessage
+      IMAGE_TAG: latest
+      IMAGE_VER_TAG: ${{ github.run_number }}
+      IMAGE_TAR: kmessage.tar.gz
+      KEEP_VERSIONS: "5"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        env:
+          # kk-common 来自另一个私有仓库 kK-2004/kk-common，GITHUB_TOKEN 无权读取，
+          # 必须用带 read:packages 权限的 PAT
+          # 用户名默认取仓库 owner（kK-2004），无需单独配 secret；PAT 必填
+          GITHUB_ACTOR: ${{ secrets.GH_PACKAGES_USER || 'kK-2004' }}
+          GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Building ${IMAGE_NAME}:${IMAGE_TAG} (= build #${IMAGE_VER_TAG})"
+          # 双标签：latest 滚动 + 构建号唯一（用于回滚与历史保留）
+          docker build --progress=plain \
+            --build-arg GITHUB_ACTOR="$GITHUB_ACTOR" \
+            --build-arg GITHUB_TOKEN="$GITHUB_TOKEN" \
+            -t "${IMAGE_NAME}:${IMAGE_TAG}" \
+            -t "${IMAGE_NAME}:${IMAGE_VER_TAG}" .
+          docker images "${IMAGE_NAME}"
+          echo "Saving image to ${IMAGE_TAR}"
+          docker save "${IMAGE_NAME}:${IMAGE_TAG}" "${IMAGE_NAME}:${IMAGE_VER_TAG}" | gzip > "${IMAGE_TAR}"
+          ls -lh "${IMAGE_TAR}"
+
+      - name: Deploy to server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/root/docker/kmessage' }}
+          # 应用配置（全部来自 secrets，不在服务器维护 .env）
+          APP_PORT: ${{ secrets.APP_PORT }}
+          DATA_DIR: ${{ secrets.DATA_DIR }}
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          KMESSAGE_ADMIN_USERNAME: ${{ secrets.KMESSAGE_ADMIN_USERNAME }}
+          KMESSAGE_ADMIN_PASSWORD: ${{ secrets.KMESSAGE_ADMIN_PASSWORD }}
+          KMESSAGE_RUNTIME_ROLE: ${{ secrets.KMESSAGE_RUNTIME_ROLE }}
+        run: |
+          set -euo pipefail
+          # 必填校验：仅校验 SSH 连接信息；DB/管理员密码等在 compose 里有 :- 默认值，可不配 secret
+          : "${SSH_HOST:?missing SSH_HOST secret}"
+          : "${SSH_KEY:?missing SSH_KEY secret}"
+
+          SSH_PORT="${SSH_PORT:-22}"
+
+          # 配置 SSH
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" -t rsa,ecdsa,ed25519 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # 在 runner 上从 secrets 生成 .env（值原样写入，不经 shell 二次解释，避免日志泄露）
+          echo "Generating .env from secrets..."
+          {
+            printf 'APP_PORT=%s\n' "${APP_PORT:-8002}"
+            printf 'DATA_DIR=%s\n' "${DATA_DIR:-/root/docker/kmessage}"
+            printf 'DB_URL=%s\n' "$DB_URL"
+            printf 'DB_USERNAME=%s\n' "$DB_USERNAME"
+            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+            printf 'KMESSAGE_ADMIN_USERNAME=%s\n' "${KMESSAGE_ADMIN_USERNAME:-admin}"
+            printf 'KMESSAGE_ADMIN_PASSWORD=%s\n' "$KMESSAGE_ADMIN_PASSWORD"
+            [ -n "$KMESSAGE_RUNTIME_ROLE" ] && printf 'KMESSAGE_RUNTIME_ROLE=%s\n' "$KMESSAGE_RUNTIME_ROLE"
+          } > .env
+          chmod 600 .env
+
+          # 确保部署目录 + 同步 compose 与 .env
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=accept-new \
+            "${SSH_USER}@${SSH_HOST}" "mkdir -p '$DEPLOY_PATH'"
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" docker-compose.prod.yml .env \
+            "${SSH_USER}@${SSH_HOST}:$DEPLOY_PATH/"
+
+          # 上传镜像
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" "${IMAGE_TAR}" \
+            "${SSH_USER}@${SSH_HOST}:$DEPLOY_PATH/${IMAGE_TAR}"
+
+          # 远程部署
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" \
+            "${SSH_USER}@${SSH_HOST}" \
+            "DEPLOY_PATH='$DEPLOY_PATH' IMAGE_TAR='$IMAGE_TAR' IMAGE_NAME='$IMAGE_NAME' KEEP_VERSIONS='$KEEP_VERSIONS' bash -s" <<'REMOTE'
+          set -euo pipefail
+          echo "=== Starting deployment ==="
+          cd "$DEPLOY_PATH"
+
+          # 日志目录权限
+          mkdir -p logs && chmod -R 777 logs
+
+          # 复用既有外部网络 common-net（MySQL/Redis 等已在其上运行）
+          docker network inspect common-net >/dev/null 2>&1 || docker network create common-net
+
+          echo "Stopping old containers..."
+          docker compose -f docker-compose.prod.yml --env-file .env down --remove-orphans 2>/dev/null || true
+
+          echo "Loading Docker image..."
+          docker load < "$IMAGE_TAR"
+
+          echo "Starting services..."
+          docker compose -f docker-compose.prod.yml --env-file .env up -d --no-build
+
+          # 清理：保留最近 N 个构建号镜像，删多余；latest 永不删
+          echo "Cleaning up..."
+          rm -f "$IMAGE_TAR"
+          KEEP="${KEEP_VERSIONS:-5}"
+          docker image prune -f 2>/dev/null || true
+          docker images "$IMAGE_NAME" --format '{{.Tag}} {{.ID}}' \
+            | grep -v '<none>' \
+            | grep -v '^latest ' \
+            | sort -t' ' -k1 -n -r \
+            | tail -n +"$((KEEP + 1))" \
+            | awk '{print $2}' \
+            | while read -r id; do
+                echo "Removing old image: $id"
+                docker rmi "$id" 2>/dev/null || true
+              done
+
+          echo "=== Remaining $IMAGE_NAME images ==="
+          docker images "$IMAGE_NAME"
+          echo "=== Running containers ==="
+          docker compose -f docker-compose.prod.yml --env-file .env ps
+          echo "=== Deployment completed ==="
+          REMOTE
+
+      - name: Cleanup runner artifacts
+        if: always()
+        run: |
+          rm -f "$IMAGE_TAR" .env
+          echo "Cleaned up local tarball and generated .env"

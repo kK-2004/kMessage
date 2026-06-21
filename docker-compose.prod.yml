@@ -1,0 +1,33 @@
+name: kmessage
+
+x-app-env: &app-env
+  TZ: Asia/Shanghai
+  DB_URL: "${DB_URL:-jdbc:mysql://mysql:3306/kmessage?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}"
+  DB_USERNAME: ${DB_USERNAME:-kmessage}
+  DB_PASSWORD: ${DB_PASSWORD:-kmessage2026}
+  KMESSAGE_RUNTIME_ROLE: ${KMESSAGE_RUNTIME_ROLE:-all}
+  KMESSAGE_ADMIN_USERNAME: ${KMESSAGE_ADMIN_USERNAME:-admin}
+  KMESSAGE_ADMIN_PASSWORD: ${KMESSAGE_ADMIN_PASSWORD:-admin}
+
+services:
+  kmessage:
+    image: kmessage:latest
+    container_name: kmessage
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8002}:8002"
+    volumes:
+      - ${DATA_DIR:-/root/docker/kmessage}/logs:/app/logs
+    environment: *app-env
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8002/actuator/health | grep -o '\"status\":\\s*\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - common-net
+
+networks:
+  common-net:
+    external: true

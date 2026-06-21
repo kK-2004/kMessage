@@ -24,7 +24,9 @@ defineEmits(["submit"]);
       <KCard class="login-card">
         <KCardHeader>
           <div class="login-brand">
-            <span class="brand-mark login-brand-mark">K</span>
+            <div class="brand-mark brand-logo login-brand-mark">
+              <img src="/logo.png" alt="kMessage logo" />
+            </div>
           </div>
           <div class="login-heading">
             <KCardTitle>欢迎回来</KCardTitle>

@@ -11,6 +11,9 @@ importers:
       '@kk-2004/ui-components':
         specifier: ^0.2.2
         version: 0.2.2(marked@18.0.5)(tdesign-icons-vue-next@0.4.4(vue@3.5.35))(tdesign-vue-next@1.20.1(vue@3.5.35))(vue@3.5.35)
+      echarts:
+        specifier: ^6.1.0
+        version: 6.1.0
       element-plus:
         specifier: ^2.14.2
         version: 2.14.2(vue@3.5.35)
@@ -26,6 +29,9 @@ importers:
       vue:
         specifier: ^3.5.13
         version: 3.5.35
+      vue-echarts:
+        specifier: ^8.0.1
+        version: 8.0.1(echarts@6.1.0)(vue@3.5.35)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.0
@@ -565,6 +571,9 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
+  echarts@6.1.0:
+    resolution: {integrity: sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==}
+
   element-plus@2.14.2:
     resolution: {integrity: sha512-eNH9uP3wQoNqieEIHXiNvIVv+zO5sZDU0CAZq5b0zqSN06DD0/V9xIq1R/qm3rw5k3nBTM1JvpxhCfRbaFLzDQ==}
     peerDependencies:
@@ -760,6 +769,9 @@ packages:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
 
+  tslib@2.3.0:
+    resolution: {integrity: sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==}
+
   validator@13.15.35:
     resolution: {integrity: sha512-TQ5pAGhd5whStmqWvYF4OjQROlmv9SMFVt37qoCBdqRffuuklWYQlCNnEs2ZaIBD1kZRNnikiZOS1eqgkar0iw==}
     engines: {node: '>= 0.10'}
@@ -807,6 +819,12 @@ packages:
   vue-component-type-helpers@3.3.5:
     resolution: {integrity: sha512-Fe1jyPJoUGpJOYKOri44jduR7My4yYINOMJISuMAbmrs+L5LbIDUc8NTWZYY3EJLK0yPLuCmcd5zoCsE4k2/KA==}
 
+  vue-echarts@8.0.1:
+    resolution: {integrity: sha512-23rJTFLu1OUEGRWjJGmdGt8fP+8+ja1gVgzMYPIPaHWpXegcO1viIAaeu2H4QHESlVeHzUAHIxKXGrwjsyXAaA==}
+    peerDependencies:
+      echarts: ^6.0.0
+      vue: ^3.3.0
+
   vue@3.5.35:
     resolution: {integrity: sha512-cx89fnr+0kVGHiNFG6y6s0bdjypJRFNZn6x3WPstNdQR1bi1mbB7h4v5IBGTsPJU3nK1+0Iqj3Zf+hZWMieR4Q==}
     peerDependencies:
@@ -814,6 +832,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  zrender@6.1.0:
+    resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
 snapshots:
 
@@ -1196,6 +1217,11 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
+  echarts@6.1.0:
+    dependencies:
+      tslib: 2.3.0
+      zrender: 6.1.0
+
   element-plus@2.14.2(vue@3.5.35):
     dependencies:
       '@ctrl/tinycolor': 4.2.0
@@ -1415,6 +1441,8 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
 
+  tslib@2.3.0: {}
+
   validator@13.15.35: {}
 
   vite@6.4.3(jiti@2.7.0)(lightningcss@1.32.0):
@@ -1432,6 +1460,11 @@ snapshots:
 
   vue-component-type-helpers@3.3.5: {}
 
+  vue-echarts@8.0.1(echarts@6.1.0)(vue@3.5.35):
+    dependencies:
+      echarts: 6.1.0
+      vue: 3.5.35
+
   vue@3.5.35:
     dependencies:
       '@vue/compiler-dom': 3.5.35
@@ -1439,3 +1472,7 @@ snapshots:
       '@vue/runtime-dom': 3.5.35
       '@vue/server-renderer': 3.5.35(vue@3.5.35)
       '@vue/shared': 3.5.35
+
+  zrender@6.1.0:
+    dependencies:
+      tslib: 2.3.0
