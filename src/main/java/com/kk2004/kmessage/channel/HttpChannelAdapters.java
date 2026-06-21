@@ -8,7 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriUtils;
 import org.springframework.web.client.*;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -130,6 +132,12 @@ public final class HttpChannelAdapters {
         private static final int TOKEN_REFRESH_BUFFER = 300;
         // Optional configJson key forcing a single receive_id_type instead of target-based derivation.
         private static final String CONFIG_RECEIVE_ID_TYPE = "receive_id_type";
+        // Optional configJson key for org-tree imports. Defaults to Feishu's root department "0".
+        private static final String CONFIG_ORG_ROOT_DEPARTMENT_ID = "org_root_department_id";
+        private static final String CONFIG_ORG_ROOT_DEPARTMENT_NAME = "org_root_department_name";
+        private static final String CONFIG_ORG_DEPARTMENT_ID_TYPE = "org_department_id_type";
+        private static final String FEISHU_DEPARTMENT_ID_TYPE = "department_id";
+        private static final String FEISHU_OPEN_DEPARTMENT_ID_TYPE = "open_department_id";
         private static final Pattern EMAIL_SHAPE = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
         private final ConcurrentHashMap<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
@@ -202,10 +210,14 @@ public final class HttpChannelAdapters {
         }
 
         String readConfigReceiveIdType(String configJson) {
+            return readConfigText(configJson, CONFIG_RECEIVE_ID_TYPE);
+        }
+
+        String readConfigText(String configJson, String key) {
             if (configJson == null || configJson.isBlank()) return null;
             try {
                 JsonNode node = mapper.readTree(configJson);
-                JsonNode value = node.path(CONFIG_RECEIVE_ID_TYPE);
+                JsonNode value = node.path(key);
                 return value.isTextual() ? value.asText() : null;
             } catch (JsonProcessingException e) {
                 return null;
@@ -273,21 +285,35 @@ public final class HttpChannelAdapters {
             // users requires extra contacts-scope permissions, so the picker offers groups only;
             // private targets fall back to manual open_id entry in the dialog.
             String token = getOrCreateToken(c.credentialRef);
+            List<ContactOption> chats = listJoinedChats(token);
+            return chats;
+        }
+
+        /** Paginated fetch of the chats the bot has joined (im/v1/chats). */
+        private List<ContactOption> listJoinedChats(String token) {
+            java.util.List<ContactOption> contacts = new java.util.ArrayList<>();
+            String pageToken = "";
             try {
-                String json = http.get().uri(CHATS_URL + "?user_id_type=open_id&page_size=50")
-                        .header("Authorization", "Bearer " + token)
-                        .retrieve().body(String.class);
-                JsonNode items = mapper.readTree(json).path("data").path("items");
-                java.util.List<ContactOption> contacts = new java.util.ArrayList<>();
-                for (JsonNode item : items) {
-                    String chatId = item.path("chat_id").asText("");
-                    if (chatId.isBlank()) continue;
-                    String name = item.path("name").asText(chatId);
-                    contacts.add(new ContactOption(chatId, name, "group"));
-                }
+                do {
+                    String encodedPageToken = UriUtils.encodeQueryParam(pageToken, StandardCharsets.UTF_8);
+                    String url = CHATS_URL + "?user_id_type=open_id&page_size=50"
+                            + (pageToken.isBlank() ? "" : "&page_token=" + encodedPageToken);
+                    String json = http.get().uri(url)
+                            .header("Authorization", "Bearer " + token)
+                            .retrieve().body(String.class);
+                    JsonNode items = mapper.readTree(json).path("data").path("items");
+                    for (JsonNode item : items) {
+                        String chatId = item.path("chat_id").asText("");
+                        if (chatId.isBlank()) continue;
+                        String name = item.path("name").asText(chatId);
+                        contacts.add(new ContactOption(chatId, name, "group"));
+                    }
+                    pageToken = mapper.readTree(json).path("data").path("page_token").asText("");
+                    if (!mapper.readTree(json).path("data").path("has_more").asBoolean(false)) break;
+                } while (!pageToken.isBlank());
                 return contacts;
             } catch (Exception e) {
-                return List.of();
+                return contacts;
             }
         }
 
@@ -338,79 +364,136 @@ public final class HttpChannelAdapters {
         }
 
         @Override public List<OrgNode> listOrgStructure(ChannelInstance c) {
-            // Feishu: build the enterprise org tree from contact/v3/departments (fetch_child=true)
-            // and attach each department's members via contact/v3/users/find_by_department.
+            // Feishu: build a department tree from contact/v3/departments/{id}/children
+            // and attach each department's direct members via contact/v3/users/find_by_department.
             // Requires contact:department.base:readonly + contact:user.base:readonly and the
-            // app's contacts permission range set to "all members" to see the root department.
+            // app's contacts permission range to include the configured root department.
             String token = getOrCreateToken(c.credentialRef);
-            // 1. Fetch all departments (fetch_child returns the whole subtree in pages).
-            // department_id=0 means start from the root; fetch_child=true recurses the whole tree.
-            java.util.List<java.util.Map<String, String>> deptItems = new java.util.ArrayList<>();
-            String deptPageToken = "";
+            String rootDepartmentId = readConfigText(c.configJson, CONFIG_ORG_ROOT_DEPARTMENT_ID);
+            if (rootDepartmentId == null || rootDepartmentId.isBlank()) rootDepartmentId = "0";
+            String departmentIdType = resolveDepartmentIdType(c.configJson, rootDepartmentId);
+
+            java.util.List<OrgNode> rootNodes = new java.util.ArrayList<>();
+            rootNodes.addAll(fetchDepartmentUsers(token, rootDepartmentId, departmentIdType));
+            rootNodes.addAll(fetchDepartmentChildren(token, rootDepartmentId, departmentIdType, new java.util.HashSet<>()));
+            if (!"0".equals(rootDepartmentId)) {
+                String rootName = readConfigText(c.configJson, CONFIG_ORG_ROOT_DEPARTMENT_NAME);
+                if (rootName == null || rootName.isBlank()) rootName = rootDepartmentId;
+                rootNodes = java.util.List.of(new OrgNode(rootDepartmentId, rootName, "", true, null, null, rootNodes));
+            }
+
+            // Merge the groups the bot has joined (im/v1/chats) as a sibling top-level subtree so
+            // the member picker can pull users from both the org department tree AND group chats.
+            java.util.List<OrgNode> chatNodes = fetchJoinedChatsTree(token);
+            if (!chatNodes.isEmpty()) {
+                rootNodes = new java.util.ArrayList<>(rootNodes);
+                rootNodes.add(new OrgNode(
+                        CHATS_VIRTUAL_ROOT_ID, "机器人群聊", "", true, null, null, chatNodes));
+            }
+
+            log.info("org-structure: rootDepartment={}, departmentIdType={}, topNodes={}, chatNodes={}",
+                    rootDepartmentId, departmentIdType, rootNodes.size(), chatNodes.size());
+            return rootNodes;
+        }
+
+        // Virtual node id used to group the bot's joined chats under a single top-level parent.
+        // Prefixed to avoid colliding with real Feishu ids (department / open_id / chat_id).
+        private static final String CHATS_VIRTUAL_ROOT_ID = "__feishu_chats__";
+
+        /**
+         * Build a subtree of the bot's joined chats. Each chat is exposed as a SELECTABLE leaf
+         * (department=false, targetId=chat_id): choosing it sends ONE message to the whole group
+         * (resolveReceiveIdType maps an {@code oc_} target to receive_id_type=chat_id). We do NOT
+         * expand chat members, because the deliverable target is the group itself, not individuals.
+         */
+        private List<OrgNode> fetchJoinedChatsTree(String token) {
+            java.util.List<OrgNode> chatNodes = new java.util.ArrayList<>();
+            for (ContactOption chat : listJoinedChats(token)) {
+                chatNodes.add(new OrgNode(chat.id(), chat.label(), CHATS_VIRTUAL_ROOT_ID, false, chat.id(), chat.id(), java.util.List.of()));
+            }
+            return chatNodes;
+        }
+
+
+
+        String resolveDepartmentIdType(String configJson, String rootDepartmentId) {
+            String override = readConfigText(configJson, CONFIG_ORG_DEPARTMENT_ID_TYPE);
+            if (FEISHU_OPEN_DEPARTMENT_ID_TYPE.equals(override) || FEISHU_DEPARTMENT_ID_TYPE.equals(override))
+                return override;
+            return rootDepartmentId != null && rootDepartmentId.startsWith("od-")
+                    ? FEISHU_OPEN_DEPARTMENT_ID_TYPE
+                    : FEISHU_DEPARTMENT_ID_TYPE;
+        }
+
+        private List<OrgNode> fetchDepartmentChildren(String token, String parentDepartmentId, String departmentIdType, java.util.Set<String> visited) {
+            if (!visited.add(departmentIdType + ":" + parentDepartmentId)) return List.of();
+            java.util.List<OrgNode> departments = new java.util.ArrayList<>();
+            String pageToken = "";
             try {
                 do {
-                    String url = "https://open.feishu.cn/open-apis/contact/v3/departments?department_id=0&fetch_child=true&user_id_type=open_id&page_size=50"
-                            + (deptPageToken.isBlank() ? "" : "&page_token=" + deptPageToken);
+                    String encodedId = UriUtils.encodePathSegment(parentDepartmentId, StandardCharsets.UTF_8);
+                    String encodedType = UriUtils.encodeQueryParam(departmentIdType, StandardCharsets.UTF_8);
+                    String encodedPageToken = UriUtils.encodeQueryParam(pageToken, StandardCharsets.UTF_8);
+                    String url = "https://open.feishu.cn/open-apis/contact/v3/departments/" + encodedId
+                            + "/children?department_id_type=" + encodedType + "&user_id_type=open_id&page_size=50"
+                            + (pageToken.isBlank() ? "" : "&page_token=" + encodedPageToken);
                     String json = http.get().uri(url).header("Authorization", "Bearer " + token).retrieve().body(String.class);
                     JsonNode root = checkFeishuCode(json);
                     for (JsonNode d : root.path("data").path("items")) {
-                        deptItems.add(java.util.Map.of(
-                                "id", d.path("department_id").asText(""),
-                                "name", d.path("name").asText(d.path("department_id").asText("")),
-                                "parent", d.path("parent_id").asText("")));
+                        String deptId = d.path("department_id").asText("");
+                        if (deptId.isBlank() || "0".equals(deptId)) continue;
+                        java.util.List<OrgNode> children = new java.util.ArrayList<>();
+                        children.addAll(fetchDepartmentUsers(token, deptId, departmentIdType));
+                        children.addAll(fetchDepartmentChildren(token, deptId, departmentIdType, visited));
+                        String parentId = d.path("parent_department_id").asText(d.path("parent_id").asText(parentDepartmentId));
+                        departments.add(new OrgNode(
+                                deptId,
+                                d.path("name").asText(deptId),
+                                parentId,
+                                true,
+                                null,
+                                null,
+                                children));
                     }
-                    deptPageToken = root.path("data").path("page_token").asText("");
+                    pageToken = root.path("data").path("page_token").asText("");
                     if (!root.path("data").path("has_more").asBoolean(false)) break;
-                } while (!deptPageToken.isBlank());
+                } while (!pageToken.isBlank());
+                return departments;
             } catch (com.kk2004.common.exception.BusinessException e) {
                 throw e;
             } catch (Exception e) {
-                throw new com.kk2004.common.exception.BusinessException("飞书部门拉取请求失败：" + e.getMessage());
+                throw new com.kk2004.common.exception.BusinessException("飞书子部门拉取失败 [dept=" + parentDepartmentId + "]: " + e.getMessage());
             }
-            // 2. Build department nodes and assemble tree by parent_id.
-            java.util.Map<String, OrgNode> deptNodes = new LinkedHashMap<>();
-            for (java.util.Map<String, String> d : deptItems) {
-                String id = d.get("id");
-                if (!id.isBlank()) deptNodes.put(id, new OrgNode(id, d.get("name"), d.get("parent"), true, null, null, new java.util.ArrayList<>()));
+        }
+
+        private List<OrgNode> fetchDepartmentUsers(String token, String departmentId, String departmentIdType) {
+            java.util.List<OrgNode> users = new java.util.ArrayList<>();
+            String pageToken = "";
+            try {
+                do {
+                    String encodedId = UriUtils.encodeQueryParam(departmentId, StandardCharsets.UTF_8);
+                    String encodedType = UriUtils.encodeQueryParam(departmentIdType, StandardCharsets.UTF_8);
+                    String encodedPageToken = UriUtils.encodeQueryParam(pageToken, StandardCharsets.UTF_8);
+                    String url = "https://open.feishu.cn/open-apis/contact/v3/users/find_by_department?department_id=" + encodedId
+                            + "&department_id_type=" + encodedType + "&user_id_type=open_id&page_size=50"
+                            + (pageToken.isBlank() ? "" : "&page_token=" + encodedPageToken);
+                    String json = http.get().uri(url).header("Authorization", "Bearer " + token).retrieve().body(String.class);
+                    JsonNode root = checkFeishuCode(json);
+                    for (JsonNode u : root.path("data").path("items")) {
+                        String targetId = u.path("user_id").asText("");
+                        if (targetId.isBlank()) continue;
+                        String name = u.path("name").asText(targetId);
+                        users.add(new OrgNode(targetId, name, departmentId, false, targetId, targetId, java.util.List.of()));
+                    }
+                    pageToken = root.path("data").path("page_token").asText("");
+                    if (!root.path("data").path("has_more").asBoolean(false)) break;
+                } while (!pageToken.isBlank());
+                return users;
+            } catch (com.kk2004.common.exception.BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new com.kk2004.common.exception.BusinessException("飞书部门用户拉取失败 [dept=" + departmentId + "]: " + e.getMessage());
             }
-            java.util.List<OrgNode> roots = new java.util.ArrayList<>();
-            for (OrgNode dept : deptNodes.values()) {
-                String pid = dept.parentId();
-                if (pid == null || pid.isBlank() || "0".equals(pid) || !deptNodes.containsKey(pid)) {
-                    roots.add(dept);
-                } else {
-                    ((java.util.ArrayList<OrgNode>) deptNodes.get(pid).children()).add(dept);
-                }
-            }
-            // 3. For each department, fetch its direct members and attach as user leaves.
-            for (OrgNode dept : deptNodes.values()) {
-                String deptId = dept.id();
-                String userPageToken = "";
-                try {
-                    do {
-                        String url = "https://open.feishu.cn/open-apis/contact/v3/users/find_by_department?department_id=" + deptId
-                                + "&user_id_type=open_id&page_size=50"
-                                + (userPageToken.isBlank() ? "" : "&page_token=" + userPageToken);
-                        String json = http.get().uri(url).header("Authorization", "Bearer " + token).retrieve().body(String.class);
-                        JsonNode root = checkFeishuCode(json);
-                        for (JsonNode u : root.path("data").path("items")) {
-                            String targetId = u.path("user_id").asText("");
-                            if (targetId.isBlank()) continue;
-                            String name = u.path("name").asText(targetId);
-                            ((java.util.ArrayList<OrgNode>) dept.children()).add(
-                                    new OrgNode(targetId, name, deptId, false, targetId, targetId, java.util.List.of()));
-                        }
-                        userPageToken = root.path("data").path("page_token").asText("");
-                        if (!root.path("data").path("has_more").asBoolean(false)) break;
-                    } while (!userPageToken.isBlank());
-                } catch (com.kk2004.common.exception.BusinessException e) {
-                    throw e;
-                } catch (Exception e) {
-                    throw new com.kk2004.common.exception.BusinessException("飞书部门用户拉取失败 [dept=" + deptId + "]: " + e.getMessage());
-                }
-            }
-            log.info("org-structure: {} departments, {} roots", deptNodes.size(), roots.size());
-            return roots;
         }
 
         /** Parse a Feishu response, throwing on non-zero code. Returns the root JSON node. */

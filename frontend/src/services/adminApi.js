@@ -34,6 +34,12 @@ export const adminApi = {
   logout() {
     return adminRequest("/session/logout", { method: "POST" });
   },
+  changePassword(payload) {
+    return adminRequest("/session/password", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
   listApplications() {
     return adminRequest("/applications");
   },
@@ -88,8 +94,9 @@ export const adminApi = {
       body: JSON.stringify(payload),
     });
   },
-  listAppUsers(channelId) {
-    return adminRequest(`/channels/${channelId}/users`);
+  listAppUsers(channelId, params = null) {
+    const query = params ? `?${new URLSearchParams(params).toString()}` : "";
+    return adminRequest(`/channels/${channelId}/users${query}`);
   },
   deleteAppUser(channelId, userId) {
     return adminRequest(`/channels/${channelId}/users/${userId}`, { method: "DELETE" });

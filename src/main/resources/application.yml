@@ -9,18 +9,21 @@ spring:
   application:
     name: kmessage
   main:
-    # kk-common 0.1.2 exposes requestContextFilter with the same bean name as Boot 3.5.x.
+    # kk-common exposes requestContextFilter with the same bean name as Boot 3.5.x.
     allow-bean-definition-overriding: true
   datasource:
-    url: ${DB_URL:jdbc:h2:file:./data/kmessage;MODE=PostgreSQL;AUTO_SERVER=TRUE}
-    username: ${DB_USERNAME:sa}
-    password: ${DB_PASSWORD:}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/kmessage?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:kmessage}
+    password: ${DB_PASSWORD:kmessage2026}
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
   flyway:
-    enabled: true
+    enabled: false
 
 kk:
   common:

@@ -1,10 +1,14 @@
 package com.kk2004.kmessage.channel;
 
 import com.kk2004.common.exception.BusinessException;
+import com.kk2004.common.response.PageResponse;
 import com.kk2004.kmessage.domain.ChannelType;
 import com.kk2004.kmessage.domain.Entities.*;
 import com.kk2004.kmessage.domain.ResolvedUser;
 import com.kk2004.kmessage.persistence.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -95,6 +99,27 @@ public class UserGroupService {
      */
     @Transactional
     public List<AppUserView> listUsers(String channelInstanceId) {
+        syncChannelContacts(channelInstanceId);
+        return appUsers.findByChannelInstanceId(channelInstanceId).stream()
+                .map(this::view).toList();
+    }
+
+    @Transactional
+    public PageResponse<AppUserView> listUsersPage(String channelInstanceId, int pageNum, int pageSize) {
+        syncChannelContacts(channelInstanceId);
+        int safePageNum = Math.max(pageNum, 1);
+        int safePageSize = Math.max(pageSize, 10);
+        Page<AppUser> page = appUsers.findByChannelInstanceId(
+                channelInstanceId,
+                PageRequest.of(safePageNum - 1, safePageSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        return PageResponse.of(
+                safePageNum,
+                safePageSize,
+                page.getTotalElements(),
+                page.getContent().stream().map(this::view).toList());
+    }
+
+    private void syncChannelContacts(String channelInstanceId) {
         for (ChannelContact c : contacts.findByChannelInstanceIdOrderByLastSeenAtDesc(channelInstanceId)) {
             if (appUsers.findByChannelInstanceIdAndTargetId(channelInstanceId, c.targetId).isEmpty()) {
                 AppUser u = new AppUser();
@@ -104,8 +129,6 @@ public class UserGroupService {
                 appUsers.save(u);
             }
         }
-        return appUsers.findByChannelInstanceId(channelInstanceId).stream()
-                .map(this::view).toList();
     }
 
     @Transactional
@@ -115,6 +138,7 @@ public class UserGroupService {
         if (!Objects.equals(u.channelInstanceId, channelInstanceId))
             throw new BusinessException(403, "用户不属于该渠道");
         members.deleteByAppUserId(userId);
+        contacts.deleteByChannelInstanceIdAndTargetId(channelInstanceId, u.targetId);
         appUsers.delete(u);
     }
 
@@ -238,17 +262,46 @@ public class UserGroupService {
         return members.findAppUserIdsByGroupId(groupId);
     }
 
-    /** Resolve a group to its members' channel target ids (for message fan-out). */
+    /**
+     * Resolve a group to its members' channel target ids (for message fan-out). Recursively
+     * aggregates direct members of the group AND all its descendant sub-groups, deduplicated
+     * by channel target id so a user appearing in multiple sub-groups receives one message.
+     * A parent group with no direct members but populated sub-groups still expands to those members.
+     */
     public List<GroupMember> expandGroup(String callerId, String channelInstanceId, String groupId) {
         UserGroup g = requireGroup(groupId);
         if (!Objects.equals(g.callerId, callerId) || !Objects.equals(g.channelInstanceId, channelInstanceId))
             throw new BusinessException(403, "无权使用该分组");
-        List<String> appUserIds = members.findAppUserIdsByGroupId(groupId);
+        // Collect this group + all descendant group ids (BFS over the parent_id edges).
+        List<String> groupIds = collectDescendantGroupIds(groupId);
+        List<String> appUserIds = members.findAppUserIdsByGroupIdIn(groupIds);
         if (appUserIds.isEmpty()) return List.of();
         // Users are channel-level; no caller filter. Only the group's channel is authoritative.
-        return appUsers.findAllById(appUserIds).stream()
-                .map(u -> new GroupMember(u.id, u.targetId))
+        // Dedup by targetId so overlapping sub-groups don't produce duplicate deliveries.
+        LinkedHashMap<String, String> byTarget = new LinkedHashMap<>();
+        for (AppUser u : appUsers.findAllById(appUserIds)) {
+            byTarget.putIfAbsent(u.targetId, u.id);
+        }
+        return byTarget.entrySet().stream()
+                .map(e -> new GroupMember(e.getValue(), e.getKey()))
                 .toList();
+    }
+
+    /** BFS over parent_id to gather this group and every descendant group id. */
+    private List<String> collectDescendantGroupIds(String rootGroupId) {
+        List<String> result = new ArrayList<>();
+        Set<String> visited = new HashSet<>();
+        List<String> frontier = new ArrayList<>(List.of(rootGroupId));
+        while (!frontier.isEmpty()) {
+            List<String> next = new ArrayList<>();
+            for (String id : frontier) {
+                if (!visited.add(id)) continue; // guard against cycles
+                result.add(id);
+                for (UserGroup child : groups.findByParentId(id)) next.add(child.id);
+            }
+            frontier = next;
+        }
+        return result;
     }
 
     /** Resolve a channel-level user to its channel target id (for single-user send). */

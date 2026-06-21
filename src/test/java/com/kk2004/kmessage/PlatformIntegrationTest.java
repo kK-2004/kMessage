@@ -26,6 +26,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:kmessage;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+        // application.yml pins MySQLDialect, which emits engine=InnoDB DDL that H2 rejects.
+        // Override to H2Dialect so the in-memory schema generates cleanly under the test driver.
+        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
         "kmessage.admin.username=test-admin",
         "kmessage.admin.password=test-password",
         "kmessage.runtime-role=api",
@@ -383,6 +386,114 @@ class PlatformIntegrationTest {
     }
 
     @Test
+    void groupContainingChatGroupBroadcastsToChat() throws Exception {
+        // Create a Feishu channel + grant (needed for send + group scope).
+        String feishuChannelBody = mvc.perform(post("/api/admin/channels").session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"FEISHU\",\"name\":\"fs-chat\",\"enabled\":true,\"credentialRef\":\"env:FEISHU_TOKEN\",\"configJson\":\"{}\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String feishuChannelId = mapper.readTree(feishuChannelBody).get("data").get("id").asText();
+        mvc.perform(put("/api/admin/applications/{caller}/channels/{channel}", callerId, feishuChannelId).session(adminSession))
+                .andExpect(status().isOk());
+
+        // Create a group and add ONE open_id user + ONE chat group (oc_) via org-members,
+        // mirroring what the "机器人群聊" picker produces when a chat is selected as a member.
+        String groupBody = mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups", callerId, feishuChannelId)
+                        .session(adminSession).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"mixed\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String groupId = mapper.readTree(groupBody).get("data").get("id").asText();
+
+        mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups/{g}/org-members", callerId, feishuChannelId, groupId)
+                        .session(adminSession).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targets\":[{\"targetId\":\"ou_alice\",\"name\":\"Alice\"},{\"targetId\":\"oc_alert\",\"name\":\"告警群\"}]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
+
+        // The group has 2 members: one resolves to open_id, one to chat_id.
+        Assertions.assertEquals(2, userGroupService.expandGroup(callerId, feishuChannelId, groupId).size());
+
+        // Fan-out: the chat (oc_) is ONE message broadcast to the whole group (chat_id type),
+        // the user (ou_) is ONE message (open_id type). Adapter receives both targets.
+        java.util.List<String> seenTargets = new java.util.ArrayList<>();
+        when(adapter.send(any(), any())).thenAnswer(inv -> {
+            seenTargets.add(((Message) inv.getArgument(1)).targetValue);
+            return DeliveryResult.success("ok");
+        });
+
+        String groupSend = mapper.writeValueAsString(Map.of(
+                "channelInstanceId", feishuChannelId, "groupId", groupId,
+                "text", "hi-mixed", "idempotencyKey", "mix-1"));
+        String batchBody = mvc.perform(post("/api/messages").header("X-App-Key", appKey).header("X-App-Secret", appSecret)
+                        .contentType(MediaType.APPLICATION_JSON).content(groupSend))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        JsonNode batch = mapper.readTree(batchBody).get("data");
+        Assertions.assertEquals(2, batch.get("totalMessages").asInt());
+        java.util.List<String> claimed = delivery.claim(2);
+        Assertions.assertEquals(2, claimed.size());
+        delivery.deliver(claimed.get(0));
+        delivery.deliver(claimed.get(1));
+        Assertions.assertTrue(seenTargets.contains("ou_alice"));
+        Assertions.assertTrue(seenTargets.contains("oc_alert"));
+    }
+
+    @Test
+    void groupFanOutRecursesIntoSubGroups() throws Exception {
+        // Create a Feishu channel + grant.
+        String feishuChannelBody = mvc.perform(post("/api/admin/channels").session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"FEISHU\",\"name\":\"fs-sub\",\"enabled\":true,\"credentialRef\":\"env:FEISHU_TOKEN\",\"configJson\":\"{}\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String feishuChannelId = mapper.readTree(feishuChannelBody).get("data").get("id").asText();
+        mvc.perform(put("/api/admin/applications/{caller}/channels/{channel}", callerId, feishuChannelId).session(adminSession))
+                .andExpect(status().isOk());
+
+        // Parent group with NO direct members + two child sub-groups, each holding members.
+        String parentBody = mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups", callerId, feishuChannelId)
+                        .session(adminSession).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"parent\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String parentId = mapper.readTree(parentBody).get("data").get("id").asText();
+        String childA = mapper.readTree(mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups", callerId, feishuChannelId)
+                        .session(adminSession).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"childA\",\"parentId\":\"" + parentId + "\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("data").get("id").asText();
+        String childB = mapper.readTree(mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups", callerId, feishuChannelId)
+                        .session(adminSession).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"childB\",\"parentId\":\"" + parentId + "\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("data").get("id").asText();
+        mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups/{g}/org-members", callerId, feishuChannelId, childA)
+                        .session(adminSession).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targets\":[{\"targetId\":\"ou_alice\",\"name\":\"Alice\"}]}"))
+                .andExpect(status().isOk());
+        // childB has the SAME member as childA → dedup must produce one delivery, not two.
+        mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups/{g}/org-members", callerId, feishuChannelId, childB)
+                        .session(adminSession).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targets\":[{\"targetId\":\"ou_alice\",\"name\":\"Alice\"},{\"targetId\":\"oc_alert\",\"name\":\"告警群\"}]}"))
+                .andExpect(status().isOk());
+
+        // Sending to the PARENT fans out to all descendant members (Alice + 告警群), deduplicated.
+        java.util.List<String> seenTargets = new java.util.ArrayList<>();
+        when(adapter.send(any(), any())).thenAnswer(inv -> {
+            seenTargets.add(((Message) inv.getArgument(1)).targetValue);
+            return DeliveryResult.success("ok");
+        });
+        String groupSend = mapper.writeValueAsString(Map.of(
+                "channelInstanceId", feishuChannelId, "groupId", parentId,
+                "text", "hi-tree", "idempotencyKey", "tree-1"));
+        String batchBody = mvc.perform(post("/api/messages").header("X-App-Key", appKey).header("X-App-Secret", appSecret)
+                        .contentType(MediaType.APPLICATION_JSON).content(groupSend))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        JsonNode batch = mapper.readTree(batchBody).get("data");
+        // 2 unique targets (ou_alice deduped across childA+childB, oc_alert once) — NOT 3.
+        Assertions.assertEquals(2, batch.get("totalMessages").asInt());
+        java.util.List<String> claimed = delivery.claim(2);
+        Assertions.assertEquals(2, claimed.size());
+        delivery.deliver(claimed.get(0));
+        delivery.deliver(claimed.get(1));
+        Assertions.assertTrue(seenTargets.contains("ou_alice"));
+        Assertions.assertTrue(seenTargets.contains("oc_alert"));
+        Assertions.assertEquals(1, seenTargets.stream().filter("ou_alice"::equals).count());
+    }
+
+    @Test
     void addOrgMembersUpsertsUsersAndAddsToGroup() throws Exception {
         // Create a group for the app+channel.
         String groupBody = mvc.perform(post("/api/admin/applications/{a}/channels/{c}/groups", callerId, channelId)
@@ -417,10 +528,26 @@ class PlatformIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         JsonNode users = mapper.readTree(body).get("data");
         Assertions.assertEquals(2, users.size());
+        String pageBody = mvc.perform(get("/api/admin/channels/{c}/users?pageNum=1&pageSize=1", channelId)
+                        .session(adminSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode page = mapper.readTree(pageBody).get("data");
+        Assertions.assertEquals(1, page.get("pageNum").asInt());
+        Assertions.assertEquals(10, page.get("pageSize").asInt());
+        Assertions.assertEquals(2, page.get("total").asInt());
+        Assertions.assertEquals(2, page.get("records").size());
         // Contacts are merged into app_users at the channel level and deduplicated on repeat.
         mvc.perform(get("/api/admin/channels/{c}/users", channelId).session(adminSession))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(2));
         Assertions.assertEquals(2, appUsers.findByChannelInstanceId(channelId).size());
+
+        String userId = users.get(0).get("id").asText();
+        String targetId = users.get(0).get("targetId").asText();
+        mvc.perform(delete("/api/admin/channels/{c}/users/{u}", channelId, userId).session(adminSession))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
+        Assertions.assertTrue(contacts.findByChannelInstanceIdAndTargetId(channelId, targetId).isEmpty());
+        mvc.perform(get("/api/admin/channels/{c}/users", channelId).session(adminSession))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1));
     }
     @Test
     void rejectsMissingAppCredentialsAndConflictingIdempotency() throws Exception {

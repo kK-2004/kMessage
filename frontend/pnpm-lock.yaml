@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@kk-2004/ui-components':
-        specifier: ^0.2.1
-        version: 0.2.1(marked@18.0.5)(tdesign-icons-vue-next@0.4.4(vue@3.5.35))(tdesign-vue-next@1.20.1(vue@3.5.35))(vue@3.5.35)
+        specifier: ^0.2.2
+        version: 0.2.2(marked@18.0.5)(tdesign-icons-vue-next@0.4.4(vue@3.5.35))(tdesign-vue-next@1.20.1(vue@3.5.35))(vue@3.5.35)
       element-plus:
         specifier: ^2.14.2
         version: 2.14.2(vue@3.5.35)
@@ -253,8 +253,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@kk-2004/ui-components@0.2.1':
-    resolution: {integrity: sha512-iFtOfJxz0wrAucjtTvBBhtmwckcL+Djtqixb6iMWsut5UbiuaUdd+Ow7z7ynwBVdCSTlXqb3UzDIJ6hH44tyqA==}
+  '@kk-2004/ui-components@0.2.2':
+    resolution: {integrity: sha512-ENS4Cg2OaFGrRPmaXR3Xg8IlF7tLAjfLYAfbpkYjBXZLXaxa7W+x6fwI8yV1oBJ37QlBa4M0dgJe6CGPg3je7A==}
     peerDependencies:
       marked: ^18.0.0
       tdesign-icons-vue-next: ^0.4.0
@@ -946,7 +946,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@kk-2004/ui-components@0.2.1(marked@18.0.5)(tdesign-icons-vue-next@0.4.4(vue@3.5.35))(tdesign-vue-next@1.20.1(vue@3.5.35))(vue@3.5.35)':
+  '@kk-2004/ui-components@0.2.2(marked@18.0.5)(tdesign-icons-vue-next@0.4.4(vue@3.5.35))(tdesign-vue-next@1.20.1(vue@3.5.35))(vue@3.5.35)':
     dependencies:
       marked: 18.0.5
       tdesign-icons-vue-next: 0.4.4(vue@3.5.35)

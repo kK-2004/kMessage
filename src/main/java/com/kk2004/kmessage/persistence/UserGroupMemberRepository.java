@@ -19,4 +19,8 @@ public interface UserGroupMemberRepository extends JpaRepository<UserGroupMember
     /** AppUser ids that are members of the given group. */
     @Query(value = "select app_user_id from user_group_members where group_id = :groupId", nativeQuery = true)
     List<String> findAppUserIdsByGroupId(@Param("groupId") String groupId);
+
+    /** AppUser ids that are direct members of ANY of the given groups (not deduplicated). */
+    @Query(value = "select app_user_id from user_group_members where group_id in (:groupIds)", nativeQuery = true)
+    List<String> findAppUserIdsByGroupIdIn(@Param("groupIds") List<String> groupIds);
 }

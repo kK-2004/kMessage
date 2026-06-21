@@ -31,7 +31,7 @@
     </section>
 
     <section class="mtp-selected-panel">
-      <header class="mtp-selected-head">已选用户 ({{ selectedUsers.length }})</header>
+      <header class="mtp-selected-head">已选目标 ({{ selectedUsers.length }})</header>
       <div v-if="selectedUsers.length" class="mtp-selected-list">
         <article v-for="user in selectedUsers" :key="user.id" class="mtp-selected-item">
           <span class="mtp-avatar" :style="{ background: colorFor(userLabel(user)) }">
@@ -45,11 +45,11 @@
         </article>
       </div>
       <div v-else class="mtp-selected-empty">
-        <strong>暂未选择用户</strong>
-        <span>在左侧勾选用户后会显示在这里。</span>
+        <strong>暂未选择目标</strong>
+        <span>在左侧勾选用户或群组后会显示在这里。</span>
       </div>
       <footer class="mtp-selected-foot">
-        <span>共 {{ selectedUsers.length }} 人</span>
+        <span>共 {{ selectedUsers.length }} 个</span>
         <button type="button" :disabled="!selectedUsers.length" @click="clearSelected">清空</button>
       </footer>
     </section>
@@ -75,7 +75,7 @@ const emit = defineEmits(["update:modelValue", "selection-change"]);
 const keyword = ref("");
 const ROOT_ID = "__root__";
 
-// Org mode: build a unified tree from the orgTree prop.
+// Org mode: render the provider tree exactly as returned by the backend.
 const isOrgMode = computed(() => props.orgTree && props.orgTree.length > 0);
 
 function mapOrgNode(node) {
@@ -92,15 +92,7 @@ function mapOrgNode(node) {
 
 const orgMappedTree = computed(() => {
   if (!isOrgMode.value) return [];
-  // Wrap under a single root so expand-all-on-load works uniformly.
-  return [
-    {
-      id: ROOT_ID,
-      type: "group",
-      name: props.rootLabel,
-      children: props.orgTree.map(mapOrgNode),
-    },
-  ];
+  return props.orgTree.map(mapOrgNode);
 });
 
 const expandedKeys = ref(new Set([ROOT_ID]));
@@ -109,20 +101,26 @@ watch(
   () => {
     if (isOrgMode.value) {
       // Expand all department nodes by default so users are visible.
-      const all = new Set([ROOT_ID]);
+      const all = new Set();
       const walk = (nodes) => nodes.forEach((n) => {
         if (n.department) all.add(n.id);
         walk(n.children || []);
       });
-      props.orgTree.forEach(walk);
+      walk(props.orgTree);
       expandedKeys.value = all;
     }
   },
   { immediate: true, deep: true }
 );
 
-// In org mode, track selected targetIds; in flat mode, selected user ids.
-const selectedSet = computed(() => new Set(isOrgMode.value ? props.selectedTargetIds : props.modelValue));
+// In org mode, already-joined users and draft selections both need to appear checked,
+// but only draft selections are emitted when the admin clicks "加入分组".
+const orgSelections = ref(new Set());
+const committedOrgSelectionSet = computed(() => new Set(props.selectedTargetIds));
+const selectedSet = computed(() => {
+  if (!isOrgMode.value) return new Set(props.modelValue);
+  return new Set([...committedOrgSelectionSet.value, ...orgSelections.value]);
+});
 const userMap = computed(() => new Map(props.users.map((user) => [user.id, user])));
 
 // Build the node for getUserIds: in org mode we key by targetId for users.
@@ -146,7 +144,6 @@ const tree = computed(() => {
 });
 
 // Selected display list: org mode uses org selections, flat mode uses user objects.
-const orgSelections = ref(new Set()); // targetIds chosen via org picker (not yet committed to group)
 const selectedUsers = computed(() => {
   if (isOrgMode.value) {
     return collectOrgUsers(orgMappedTree.value)
@@ -178,14 +175,15 @@ const visibleTree = computed(() => {
   const term = keyword.value.trim().toLowerCase();
   if (!term) return tree.value;
 
-  return tree.value
-    .map((root) => {
-      const children = root.children.filter((node) =>
-        [node.name, node.title, node.user?.targetId].some((value) => String(value || "").toLowerCase().includes(term))
-      );
-      return children.length ? { ...root, children } : null;
-    })
-    .filter(Boolean);
+  const matches = (node) =>
+    [node.name, node.title, node.user?.targetId, node.targetId].some((value) =>
+      String(value || "").toLowerCase().includes(term)
+    );
+  const filterNode = (node) => {
+    const children = (node.children || []).map(filterNode).filter(Boolean);
+    return matches(node) || children.length ? { ...node, children } : null;
+  };
+  return tree.value.map(filterNode).filter(Boolean);
 });
 
 function getUserIds(node) {
@@ -196,9 +194,11 @@ function getUserIds(node) {
 function toggleSelect(node) {
   if (isOrgMode.value) {
     const ids = getUserIds(node);
+    const selectableIds = ids.filter((id) => !committedOrgSelectionSet.value.has(id));
+    if (!selectableIds.length) return;
     const next = new Set(orgSelections.value);
-    const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
-    ids.forEach((id) => { allSelected ? next.delete(id) : next.add(id); });
+    const allSelected = selectableIds.every((id) => next.has(id));
+    selectableIds.forEach((id) => { allSelected ? next.delete(id) : next.add(id); });
     orgSelections.value = next;
     // Emit the {targetId, name} pairs for the newly selected set.
     const chosen = collectOrgUsers(orgMappedTree.value).filter((n) => next.has(n.id))

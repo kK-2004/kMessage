@@ -10,6 +10,7 @@ export function useAdminConsole() {
   const channels = ref([]);
   const channelTypes = ref([]);
   const secret = ref(null);
+  const adminUsername = ref("");
   const toast = useTDesignToast();
 
   const loginForm = reactive({ username: "", password: "" });
@@ -66,6 +67,7 @@ export function useAdminConsole() {
     try {
       const user = await adminApi.getSession();
       authenticated.value = Boolean(user);
+      adminUsername.value = typeof user === "string" ? user : "";
       if (authenticated.value) await loadData();
     } catch (error) {
       if (error.status === 401) authenticated.value = false;
@@ -77,7 +79,8 @@ export function useAdminConsole() {
   async function login() {
     loading.value = true;
     try {
-      await adminApi.login(loginForm);
+      const user = await adminApi.login(loginForm);
+      adminUsername.value = typeof user === "string" ? user : loginForm.username;
       loginForm.password = "";
       authenticated.value = true;
       notify("登录成功");
@@ -92,7 +95,20 @@ export function useAdminConsole() {
   async function logout() {
     await adminApi.logout();
     authenticated.value = false;
+    adminUsername.value = "";
     secret.value = null;
+  }
+
+  async function changePassword(payload) {
+    try {
+      await adminApi.changePassword(payload);
+      notify("密码修改成功");
+      return true;
+    } catch (error) {
+      handleUnauthorized(error);
+      notify(error.message, "destructive");
+      return false;
+    }
   }
 
   async function createApplication() {
@@ -194,16 +210,18 @@ export function useAdminConsole() {
     channels,
     channelTypes,
     secret,
+    adminUsername,
     loginForm,
     applicationForm,
     channelForm,
     selectedChannelType,
     channelLabel,
-    loadData,
-    checkSession,
-    login,
-    logout,
-    createApplication,
+  loadData,
+  checkSession,
+  login,
+  logout,
+  changePassword,
+  createApplication,
     rotateApplication,
     deleteApplication,
     createChannel,

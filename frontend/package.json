@@ -9,7 +9,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@kk-2004/ui-components": "^0.2.1",
+    "@kk-2004/ui-components": "^0.2.2",
     "element-plus": "^2.14.2",
     "marked": "^18.0.5",
     "tdesign-icons-vue-next": "^0.4.4",

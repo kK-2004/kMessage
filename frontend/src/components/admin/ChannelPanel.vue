@@ -15,7 +15,6 @@ import {
   KDialogDescription,
   KDialogFooter,
   KDialogHeader,
-  KDialogOverlay,
   KDialogTitle,
   KEmptyState,
   KInput,
@@ -24,7 +23,7 @@ import {
   KSwitch,
   KTextarea,
 } from "@kk-2004/ui-components";
-import { ElSelect, ElOption, ElMessage, ElTable, ElTableColumn } from "element-plus";
+import { ElSelect, ElOption, ElMessage, ElTable, ElTableColumn, ElPagination } from "element-plus";
 import { ref, computed, reactive, watch } from "vue";
 import { adminApi } from "../../services/adminApi";
 
@@ -127,24 +126,77 @@ const usersDialogOpen = ref(false);
 const usersChannel = ref(null);
 const channelUsers = ref([]);
 const channelUsersLoading = ref(false);
+const deletingUserId = ref("");
+const userPageSizes = [10, 20, 50, 100];
+const userPage = reactive({ pageNum: 1, pageSize: 10, total: 0 });
 
 async function openUsersDialog(channel) {
   usersChannel.value = channel;
-  usersDialogOpen.value = true;
+  channelUsers.value = [];
+  userPage.pageNum = 1;
+  userPage.pageSize = 10;
+  userPage.total = 0;
   await loadChannelUsers(channel);
+  usersDialogOpen.value = true;
 }
 
 async function loadChannelUsers(channel) {
   if (!channel) return;
   channelUsersLoading.value = true;
   try {
-    channelUsers.value = await adminApi.listAppUsers(channel.id);
+    const page = await adminApi.listAppUsers(channel.id, {
+      pageNum: userPage.pageNum,
+      pageSize: userPage.pageSize,
+    });
+    channelUsers.value = page.records || [];
+    userPage.pageNum = Number(page.pageNum || userPage.pageNum);
+    userPage.pageSize = Math.max(Number(page.pageSize || userPage.pageSize), 10);
+    userPage.total = Number(page.total || 0);
   } catch (e) {
     channelUsers.value = [];
+    userPage.total = 0;
     ElMessage.error(e.message || "用户加载失败");
   } finally {
     channelUsersLoading.value = false;
   }
+}
+
+async function changeUserPage(pageNum) {
+  userPage.pageNum = pageNum;
+  await loadChannelUsers(usersChannel.value);
+}
+
+async function changeUserPageSize(pageSize) {
+  userPage.pageSize = Math.max(Number(pageSize), 10);
+  userPage.pageNum = 1;
+  await loadChannelUsers(usersChannel.value);
+}
+
+async function deleteChannelUser(row) {
+  if (!usersChannel.value || !row?.id) return;
+  const label = displayUserName(row) === "未命名用户" ? row.targetId || row.id : displayUserName(row);
+  if (!window.confirm(`确定从渠道用户池删除「${label}」吗？该用户也会从相关分组中移除。`)) return;
+  deletingUserId.value = row.id;
+  try {
+    await adminApi.deleteAppUser(usersChannel.value.id, row.id);
+    ElMessage.success("用户已删除");
+    await loadChannelUsers(usersChannel.value);
+    if (!channelUsers.value.length && userPage.total > 0 && userPage.pageNum > 1) {
+      userPage.pageNum -= 1;
+      await loadChannelUsers(usersChannel.value);
+    }
+    emit("users-imported", { channelId: usersChannel.value.id });
+  } catch (e) {
+    ElMessage.error(e.message || "删除失败");
+  } finally {
+    deletingUserId.value = "";
+  }
+}
+
+function displayUserName(row) {
+  const name = row?.name?.trim();
+  if (name && name !== row.targetId) return name;
+  return "未命名用户";
 }
 
 function formatTime(value) {
@@ -178,6 +230,12 @@ async function openImportDialog(channel) {
   importText.value = "";
   importResult.value = null;
   importDialogOpen.value = true;
+}
+
+// 从「查看用户」模态框右上角进入批量导入：先关掉查看用户框，再打开导入框，避免两层模态叠加。
+function openImportFromUsers(channel) {
+  usersDialogOpen.value = false;
+  openImportDialog(channel);
 }
 
 function parseLines(text) {
@@ -281,11 +339,16 @@ function submitEdit() {
         </div>
       </form>
 
-      <KAlert v-if="selectedChannelType" variant="default" class="setup-guide">
-        <KAlertTitle>{{ selectedChannelType.label }} 接入指南</KAlertTitle>
-        <KAlertDescription>{{ selectedChannelType.description }}</KAlertDescription>
-        <p class="setup-steps" v-html="selectedChannelType.setupGuide.replace(/\n/g, '<br/>')"></p>
-      </KAlert>
+      <details v-if="selectedChannelType" :key="selectedChannelType.type" class="setup-guide">
+        <summary class="setup-guide-summary">
+          <span class="setup-guide-title">{{ selectedChannelType.label }} 接入指南</span>
+          <span class="setup-guide-toggle" aria-hidden="true"></span>
+        </summary>
+        <div class="setup-guide-body">
+          <p class="setup-guide-description">{{ selectedChannelType.description }}</p>
+          <p class="setup-steps" v-html="selectedChannelType.setupGuide.replace(/\n/g, '<br/>')"></p>
+        </div>
+      </details>
 
       <div v-if="channels.length" class="channel-grid">
         <article v-for="channel in channels" :key="channel.id" class="channel-tile">
@@ -316,9 +379,6 @@ function submitEdit() {
           <div class="resource-actions">
             <KButton v-if="channel.enabled" size="sm" @click="openSendDialog(channel)">发消息</KButton>
             <KButton variant="outline" size="sm" @click="openUsersDialog(channel)">查看用户</KButton>
-            <KButton v-if="canBatchImport(channel)" variant="outline" size="sm" @click="openImportDialog(channel)">
-              批量添加用户
-            </KButton>
             <KButton variant="outline" size="sm" @click="openEditDialog(channel)">编辑</KButton>
             <KButton variant="destructive" size="sm" @click="$emit('delete', channel)">删除</KButton>
           </div>
@@ -329,7 +389,6 @@ function submitEdit() {
   </KCard>
 
   <KDialog v-model:open="sendDialogOpen">
-    <KDialogOverlay />
     <KDialogContent>
       <KDialogHeader>
         <KDialogTitle>发送消息 — {{ sendChannel?.name }}</KDialogTitle>
@@ -393,38 +452,86 @@ function submitEdit() {
   </KDialog>
 
   <KDialog v-model:open="usersDialogOpen">
-    <KDialogOverlay />
-    <KDialogContent class="dialog-wide">
-      <KDialogHeader>
-        <KDialogTitle>渠道用户 — {{ usersChannel?.name }}</KDialogTitle>
-        <KDialogDescription>查看该渠道已同步或导入的用户，分组页可从这里的用户池中选择成员。</KDialogDescription>
-      </KDialogHeader>
-      <p v-if="channelUsersLoading" class="inline-loading">正在加载渠道用户...</p>
-      <ElTable v-else-if="channelUsers.length" :data="channelUsers" class="k-table channel-users-table" stripe size="small">
-        <ElTableColumn label="名称" min-width="120">
-          <template #default="{ row }">
-            <span class="cell-name">{{ row.name || row.targetId }}</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="targetId" min-width="220">
-          <template #default="{ row }">
-            <span class="target-cell">
-              <KLongText :max-length="32" class="credential-text">{{ row.targetId }}</KLongText>
-              <KCopyButton :value="row.targetId" tooltip="复制 targetId" />
-            </span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn v-if="showContactColumns" label="手机号" min-width="120" prop="phone" />
-        <ElTableColumn v-if="showContactColumns" label="邮箱" min-width="170" prop="email" />
-        <ElTableColumn label="加入时间" width="120">
-          <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-        </ElTableColumn>
-      </ElTable>
-      <KEmptyState
-        v-else
-        title="暂无用户"
-        description="飞书渠道可通过批量添加用户导入；其他渠道会在联系人拉取后同步到用户池。"
-      />
+    <KDialogContent class="dialog-wide dialog-channel-users">
+      <div class="channel-users-header">
+        <KDialogHeader class="channel-users-header-titles">
+          <KDialogTitle>渠道用户 — {{ usersChannel?.name }}</KDialogTitle>
+          <KDialogDescription>查看该渠道已同步或导入的用户，分组页可从这里的用户池中选择成员。</KDialogDescription>
+        </KDialogHeader>
+        <KButton
+          v-if="canBatchImport(usersChannel)"
+          variant="outline"
+          size="sm"
+          class="channel-users-import-btn"
+          @click="openImportFromUsers(usersChannel)"
+        >
+          批量添加用户
+        </KButton>
+      </div>
+      <div class="channel-users-body">
+        <p v-if="channelUsersLoading" class="inline-loading channel-users-loading">正在加载渠道用户...</p>
+        <ElTable
+          v-else-if="channelUsers.length"
+          :data="channelUsers"
+          class="k-table channel-users-table"
+          stripe
+          size="small"
+          height="100%"
+        >
+          <ElTableColumn label="名称" width="160">
+            <template #default="{ row }">
+              <span class="cell-name">{{ displayUserName(row) }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="targetId" min-width="360">
+            <template #default="{ row }">
+              <span class="target-cell">
+                <KLongText :max-length="44" class="credential-text">{{ row.targetId }}</KLongText>
+                <KCopyButton :value="row.targetId" tooltip="复制 targetId" />
+              </span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn v-if="showContactColumns" label="手机号" width="140">
+            <template #default="{ row }">{{ row.phone || "-" }}</template>
+          </ElTableColumn>
+          <ElTableColumn v-if="showContactColumns" label="邮箱" min-width="180">
+            <template #default="{ row }">{{ row.email || "-" }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="加入时间" width="128">
+            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="操作" width="104" fixed="right" align="right">
+            <template #default="{ row }">
+              <KButton
+                variant="destructive"
+                size="sm"
+                :disabled="deletingUserId === row.id"
+                @click="deleteChannelUser(row)"
+              >
+                {{ deletingUserId === row.id ? "删除中..." : "删除" }}
+              </KButton>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+        <KEmptyState
+          v-else
+          class="channel-users-empty"
+          title="暂无用户"
+          description="飞书渠道可通过批量添加用户导入；其他渠道会在联系人拉取后同步到用户池。"
+        />
+        <ElPagination
+          v-if="!channelUsersLoading && userPage.total > 0"
+          class="channel-users-pagination"
+          background
+          :current-page="userPage.pageNum"
+          :page-size="userPage.pageSize"
+          :page-sizes="userPageSizes"
+          :total="userPage.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="changeUserPage"
+          @size-change="changeUserPageSize"
+        />
+      </div>
       <KDialogFooter>
         <KButton variant="outline" @click="usersDialogOpen = false">关闭</KButton>
       </KDialogFooter>
@@ -432,7 +539,6 @@ function submitEdit() {
   </KDialog>
 
   <KDialog v-model:open="importDialogOpen">
-    <KDialogOverlay />
     <KDialogContent>
       <KDialogHeader>
         <KDialogTitle>批量添加用户 — {{ importChannel?.name }}</KDialogTitle>
@@ -460,7 +566,6 @@ function submitEdit() {
   </KDialog>
 
   <KDialog v-model:open="editDialogOpen">
-    <KDialogOverlay />
     <KDialogContent>
       <KDialogHeader>
         <KDialogTitle>编辑渠道 — {{ editChannelRef?.name }}</KDialogTitle>

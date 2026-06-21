@@ -10,4 +10,5 @@ public interface ChannelContactRepository extends JpaRepository<ChannelContact, 
     Optional<ChannelContact> findByChannelInstanceIdAndTargetId(String channelInstanceId, String targetId);
     List<ChannelContact> findByChannelInstanceIdOrderByLastSeenAtDesc(String channelInstanceId);
     void deleteByChannelInstanceId(String channelInstanceId);
+    void deleteByChannelInstanceIdAndTargetId(String channelInstanceId, String targetId);
 }

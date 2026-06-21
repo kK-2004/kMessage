@@ -168,4 +168,12 @@ public final class Entities {
         public Instant finishedAt;
         public DeliveryAttempt() {}
     }
+
+    // Singleton row (fixed id) overriding the configured admin password once changed at runtime.
+    @Entity @Table(name = "admin_credentials")
+    public static class AdminCredential extends Base {
+        public String passwordHash;
+        public Instant updatedAt = Instant.now();
+        public AdminCredential() {}
+    }
 }

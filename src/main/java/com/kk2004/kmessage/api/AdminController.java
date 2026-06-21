@@ -1,6 +1,7 @@
 package com.kk2004.kmessage.api;
 
 import com.kk2004.common.response.TransDTO;
+import com.kk2004.common.response.PageResponse;
 import com.kk2004.kmessage.channel.ChannelAdapterRegistry;
 import com.kk2004.kmessage.channel.ChannelService;
 import com.kk2004.kmessage.channel.UserGroupService;
@@ -113,7 +114,15 @@ public class AdminController {
         return TransDTO.success(userGroups.importUsers(channelId, request.mobiles(), request.emails()));
     }
     @GetMapping("/channels/{channelId}/users")
-    public TransDTO<List<UserGroupService.AppUserView>> listUsers(@PathVariable String channelId) {
+    public TransDTO<?> listUsers(@PathVariable String channelId,
+                                 @RequestParam(required = false) Integer pageNum,
+                                 @RequestParam(required = false) Integer pageSize) {
+        if (pageNum != null || pageSize != null) {
+            int safePageNum = pageNum == null ? 1 : pageNum;
+            int safePageSize = pageSize == null ? 10 : pageSize;
+            PageResponse<UserGroupService.AppUserView> page = userGroups.listUsersPage(channelId, safePageNum, safePageSize);
+            return TransDTO.success(page);
+        }
         return TransDTO.success(userGroups.listUsers(channelId));
     }
     @DeleteMapping("/channels/{channelId}/users/{userId}")

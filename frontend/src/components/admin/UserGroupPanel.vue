@@ -6,12 +6,12 @@ import {
   KCardDescription,
   KCardHeader,
   KCardTitle,
+  KCopyButton,
   KDialog,
   KDialogContent,
   KDialogDescription,
   KDialogFooter,
   KDialogHeader,
-  KDialogOverlay,
   KDialogTitle,
   KEmptyState,
   KInput,
@@ -24,18 +24,42 @@ import GroupTreeSelect from "./GroupTreeSelect.vue";
 import MemberTreePicker from "./MemberTreePicker.vue";
 
 const props = defineProps({
-  applications: { type: Array, default: () => [] },
+  application: { type: Object, default: null },
   channels: { type: Array, default: () => [] },
   channelLabel: { type: Function, required: true },
   reloadKey: { type: Number, default: 0 },
 });
+
+const emit = defineEmits(["back"]);
 
 // ---------- Available users used by group members ----------
 
 const users = ref([]);
 const usersLoading = ref(false);
 
-const selectableChannels = computed(() => props.channels.filter((c) => c.enabled));
+// Channel ids bound to the current application (via caller_channel_grants).
+const boundChannelIds = ref(new Set());
+const boundChannelsLoading = ref(false);
+// Only channels bound to this app AND enabled are eligible for group management.
+const selectableChannels = computed(() =>
+  props.channels.filter((c) => c.enabled && boundChannelIds.value.has(c.id))
+);
+
+async function loadBoundChannels(appId) {
+  if (!appId) {
+    boundChannelIds.value = new Set();
+    return;
+  }
+  boundChannelsLoading.value = true;
+  try {
+    const ids = await adminApi.listApplicationChannels(appId);
+    boundChannelIds.value = new Set(ids || []);
+  } catch {
+    boundChannelIds.value = new Set();
+  } finally {
+    boundChannelsLoading.value = false;
+  }
+}
 
 async function loadUsers(channelId) {
   if (!channelId) {
@@ -54,7 +78,7 @@ async function loadUsers(channelId) {
 
 // ---------- App groups (app+channel scoped) ----------
 
-const selectedAppId = ref("");
+const selectedAppId = computed(() => props.application?.id || "");
 const selectedChannelId = ref("");
 const groups = ref([]);
 const groupsLoading = ref(false);
@@ -88,13 +112,53 @@ async function loadScope() {
   }
 }
 
+// ---------- Org structure (Feishu): real-time department tree as user source ----------
+// NOTE: declared above the watchers because the immediate app-change watcher
+// resets them synchronously during setup; declaring them later would trigger a
+// temporal-dead-zone "Cannot access 'orgTree' before initialization".
+const selectedChannelType = computed(() => {
+  const ch = props.channels.find((c) => c.id === selectedChannelId.value);
+  return ch?.channelType || "";
+});
+const isOrgChannel = computed(() => selectedChannelType.value === "FEISHU");
+const memberSource = ref("manual");
+const isOrgSource = computed(() => isOrgChannel.value && memberSource.value === "org");
+const orgTree = ref([]);
+const orgLoading = ref(false);
+const orgError = ref("");
+const orgCheckedTargets = ref([]); // selected {targetId, name} from the org picker
+
 watch([selectedAppId, selectedChannelId], async () => {
   await loadScope();
   await loadUsers(selectedChannelId.value);
 });
+watch(
+  () => props.application?.id,
+  async (appId) => {
+    selectedChannelId.value = "";
+    groups.value = [];
+    selectedGroupId.value = "";
+    groupMembers.value = [];
+    users.value = [];
+    orgTree.value = [];
+    orgCheckedTargets.value = [];
+    // The channel dropdown must reflect THIS app's grants, so re-fetch on app change.
+    await loadBoundChannels(appId);
+  },
+  { immediate: true }
+);
 watch(() => props.reloadKey, async () => {
+  await loadBoundChannels(selectedAppId.value);
   await loadScope();
   await loadUsers(selectedChannelId.value);
+});
+
+// If the selected channel is no longer bound/enabled (e.g. after grant changes), clear it so the
+// downstream loadScope/loadUsers don't operate on an out-of-scope channel.
+watch(selectableChannels, (list) => {
+  if (selectedChannelId.value && !list.some((c) => c.id === selectedChannelId.value)) {
+    selectedChannelId.value = "";
+  }
 });
 
 // Build the tree-selector node structure from the flat group list.
@@ -143,20 +207,6 @@ const availableMemberUsers = computed(() =>
 );
 const filteredAvailableMemberUsers = computed(() => filterUsers(availableMemberUsers.value, memberKeyword.value));
 
-// ---------- Org structure (Feishu): real-time department tree as user source ----------
-
-const selectedChannelType = computed(() => {
-  const ch = props.channels.find((c) => c.id === selectedChannelId.value);
-  return ch?.channelType || "";
-});
-const isOrgChannel = computed(() => selectedChannelType.value === "FEISHU");
-const memberSource = ref("manual");
-const isOrgSource = computed(() => isOrgChannel.value && memberSource.value === "org");
-const orgTree = ref([]);
-const orgLoading = ref(false);
-const orgError = ref("");
-const orgCheckedTargets = ref([]); // selected {targetId, name} from the org picker
-
 async function loadOrgStructure(channelId) {
   if (!channelId || !isOrgChannel.value) {
     orgTree.value = [];
@@ -188,8 +238,12 @@ watch(
 );
 watch(memberSource, () => {
   orgCheckedTargets.value = [];
+  if (isOrgSource.value) loadOrgStructure(selectedChannelId.value);
 });
 watch(() => props.reloadKey, async () => {
+  await loadOrgStructure(selectedChannelId.value);
+});
+watch(() => props.channels, async () => {
   await loadOrgStructure(selectedChannelId.value);
 });
 
@@ -399,27 +453,94 @@ function filterUsers(list, keyword) {
     <KCardHeader>
       <div class="panel-heading">
         <div>
-          <KCardTitle>用户分组管理</KCardTitle>
-          <KCardDescription>分组属应用与渠道组合。选择作用域后维护分组树，并把已导入用户加入分组。</KCardDescription>
+          <KCardTitle>{{ application?.name || "应用" }} / 用户分组</KCardTitle>
+          <KCardDescription>分组归属于当前应用。选择渠道后维护分组树，并把已导入用户加入分组。</KCardDescription>
         </div>
-        <KStatusBadge label="多组成员" variant="violet" />
+        <div class="panel-heading-actions">
+          <KStatusBadge label="应用内分组" variant="violet" />
+          <KButton variant="outline" size="sm" @click="emit('back')">返回应用</KButton>
+        </div>
       </div>
     </KCardHeader>
     <KCardContent>
+      <section class="sub-section sdk-params-section">
+        <div class="sub-section-head">
+          <span class="section-title">SDK 调用参数</span>
+          <span class="hint">业务侧调用 <code>POST /api/messages</code> 所需参数；鉴权用 <code>X-App-Key</code> / <code>X-App-Secret</code> 请求头，调用体填入 <code>channelInstanceId</code> 与 <code>groupId</code>。</span>
+        </div>
+        <dl class="test-info">
+          <dt>应用 ID (appId)</dt>
+          <dd>
+            <code>{{ selectedAppId || "—" }}</code>
+            <KCopyButton
+              v-if="selectedAppId"
+              :value="selectedAppId"
+              tooltip="复制应用 ID"
+              size="icon-sm"
+            />
+          </dd>
+
+          <dt>appKey</dt>
+          <dd>
+            <code>{{ props.application?.appKey || "—" }}</code>
+            <KCopyButton
+              v-if="props.application?.appKey"
+              :value="props.application.appKey"
+              tooltip="复制 appKey"
+              size="icon-sm"
+            />
+          </dd>
+
+          <dt>渠道 ID (channelId)</dt>
+          <dd>
+            <code v-if="selectedChannelId">{{ selectedChannelId }}</code>
+            <span v-else class="muted-value">未选择渠道</span>
+            <KCopyButton
+              v-if="selectedChannelId"
+              :value="selectedChannelId"
+              tooltip="复制渠道 ID"
+              size="icon-sm"
+            />
+          </dd>
+
+          <dt>分组 ID (groupId)</dt>
+          <dd>
+            <code v-if="selectedGroupId">{{ selectedGroupId }}</code>
+            <span v-else class="muted-value">未选择分组</span>
+            <KCopyButton
+              v-if="selectedGroupId"
+              :value="selectedGroupId"
+              tooltip="复制分组 ID"
+              size="icon-sm"
+            />
+          </dd>
+        </dl>
+      </section>
+
       <div class="sub-section" style="border-top: none; padding-top: 0;">
         <div class="sub-section-head">
-          <span class="section-title">应用分组</span>
-          <div class="scope-selector-inline">
-            <ElSelect v-model="selectedAppId" placeholder="选择应用" :class="{ 'full-width': true }">
-              <ElOption v-for="app in applications" :key="app.id" :value="app.id" :label="app.name" />
-            </ElSelect>
+          <span class="section-title">选择渠道</span>
+          <div v-if="selectableChannels.length" class="scope-selector-inline">
             <ElSelect v-model="selectedChannelId" placeholder="选择渠道" :disabled="!selectedAppId" :class="{ 'full-width': true }">
               <ElOption v-for="ch in selectableChannels" :key="ch.id" :value="ch.id" :label="`${ch.name}（${channelLabel(ch.channelType)}）`" />
             </ElSelect>
             <KButton size="sm" :disabled="!selectedAppId || !selectedChannelId" @click="openCreateGroup('')">新建根分组</KButton>
           </div>
         </div>
-        <template v-if="selectedAppId && selectedChannelId">
+        <!-- Single condition chain so at most one prompt is ever shown at a time. -->
+        <KEmptyState
+          v-if="!selectedAppId"
+          title="请先选择应用"
+          description="从应用列表进入后即可维护该应用的用户分组。"
+        />
+        <p v-else-if="boundChannelsLoading" class="inline-loading">正在加载已绑定渠道...</p>
+        <!-- No enabled bound channels: prompt the admin to bind/enable one before managing groups. -->
+        <KEmptyState
+          v-else-if="!selectableChannels.length"
+          title="该应用尚未绑定任何可用渠道"
+          description="请返回应用列表，通过「绑定渠道」为该应用授权启用的渠道后，再回来维护用户分组。"
+        />
+        <template v-else-if="selectedChannelId">
           <p v-if="groupsLoading" class="inline-loading">正在加载分组树...</p>
           <div v-else-if="groups.length" class="group-layout">
             <div class="group-tree-wrap">
@@ -480,7 +601,7 @@ function filterUsers(list, keyword) {
                   <section class="member-content-panel member-content-panel--single">
                     <header>
                       <span>{{ isOrgSource ? "飞书组织架构" : "手动添加用户" }}</span>
-                      <small v-if="isOrgSource">从部门树选择用户加入分组</small>
+                      <small v-if="isOrgSource">从部门选择用户、或从机器人群聊选择整个群作为目标加入分组</small>
                       <small v-else>{{ filteredAvailableMemberUsers.length }} / {{ availableMemberUsers.length }}</small>
                     </header>
 
@@ -492,7 +613,6 @@ function filterUsers(list, keyword) {
                         <MemberTreePicker
                           :org-tree="orgTree"
                           :selected-target-ids="groupMembers.map(id => (userById.get(id)?.targetId)).filter(Boolean)"
-                          root-label="组织架构"
                           empty-text="暂无组织架构数据，请检查飞书通讯录权限范围"
                           @selection-change="onOrgSelectionChange"
                         />
@@ -541,14 +661,13 @@ function filterUsers(list, keyword) {
           </div>
           <KEmptyState v-else title="该应用在此渠道暂无分组" description="新建根分组开始组织用户。" />
         </template>
-        <KEmptyState v-else title="请先选择应用与渠道" description="选择已授权的渠道后，即可维护该作用域下的分组。" />
+        <KEmptyState v-else title="请先选择渠道" description="选择渠道后，即可维护当前应用在该渠道下的分组。" />
       </div>
     </KCardContent>
   </KCard>
 
   <!-- Group create/edit dialog -->
   <KDialog v-model:open="groupDialogOpen">
-    <KDialogOverlay />
     <KDialogContent>
       <KDialogHeader>
         <KDialogTitle>{{ groupEditing ? "编辑分组" : "新建分组" }}</KDialogTitle>

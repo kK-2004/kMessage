@@ -13,6 +13,7 @@ const {
   channels,
   channelTypes,
   secret,
+  adminUsername,
   loginForm,
   applicationForm,
   channelForm,
@@ -22,6 +23,7 @@ const {
   checkSession,
   login,
   logout,
+  changePassword,
   createApplication,
   rotateApplication,
   deleteApplication,
@@ -50,10 +52,12 @@ onMounted(checkSession);
     :channels="channels"
     :channel-types="channelTypes"
     :secret="secret"
+    :admin-username="adminUsername"
     :application-form="applicationForm"
     :channel-form="channelForm"
     :selected-channel-type="selectedChannelType"
     :channel-label="channelLabel"
+    :on-change-password="changePassword"
     @refresh="loadData"
     @logout="logout"
     @create-application="createApplication"

@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { KEmptyState } from "@kk-2004/ui-components";
 import AdminTopbar from "../components/admin/AdminTopbar.vue";
 import ApplicationPanel from "../components/admin/ApplicationPanel.vue";
+import ChangePasswordDialog from "../components/admin/ChangePasswordDialog.vue";
 import ChannelPanel from "../components/admin/ChannelPanel.vue";
 import ConsoleHero from "../components/admin/ConsoleHero.vue";
 import SecretAlert from "../components/admin/SecretAlert.vue";
@@ -13,46 +15,88 @@ const props = defineProps({
   channels: { type: Array, default: () => [] },
   channelTypes: { type: Array, default: () => [] },
   secret: { type: Object, default: null },
+  adminUsername: { type: String, default: "" },
   applicationForm: { type: Object, required: true },
   channelForm: { type: Object, required: true },
   selectedChannelType: { type: Object, default: null },
   channelLabel: { type: Function, required: true },
+  onChangePassword: { type: Function, required: true },
 });
 
 const enabledChannelCount = computed(() => props.channels.filter((channel) => channel.enabled).length);
 const unavailableTypeCount = computed(() => props.channelTypes.filter((type) => !type.implemented).length);
 const userImportRevision = ref(0);
+const changePasswordOpen = ref(false);
 const pages = [
   { id: "overview", label: "概览", eyebrow: "Dashboard", index: "01" },
   { id: "applications", label: "应用", eyebrow: "Applications", index: "02" },
   { id: "channels", label: "渠道", eyebrow: "Channels", index: "03" },
-  { id: "user-groups", label: "用户分组", eyebrow: "Groups", index: "04" },
 ];
-const pageIds = new Set(pages.map((page) => page.id));
+const pageIds = new Set([...pages.map((page) => page.id), "application-groups"]);
 const activePage = ref("overview");
-const currentPage = computed(() => pages.find((page) => page.id === activePage.value) || pages[0]);
+const activeApplicationId = ref("");
+const activeApplication = computed(() =>
+  props.applications.find((application) => application.id === activeApplicationId.value) || null
+);
+const currentPage = computed(() => {
+  if (activePage.value === "application-groups") {
+    return {
+      id: "application-groups",
+      label: activeApplication.value ? `${activeApplication.value.name} / 用户分组` : "用户分组",
+      eyebrow: "Groups",
+    };
+  }
+  return pages.find((page) => page.id === activePage.value) || pages[0];
+});
 const recentApplications = computed(() => props.applications.slice(0, 4));
 const recentChannels = computed(() => props.channels.slice(0, 4));
+const adminInitial = computed(() => {
+  const name = (props.adminUsername || "").trim();
+  return name ? name.charAt(0).toUpperCase() : "A";
+});
+// Vite base 是 /admin/，public 资源需拼接 base 才能正确解析。
+const logoUrl = `${import.meta.env.BASE_URL}logo.png`;
 
-function pageFromLocation() {
-  if (typeof window === "undefined") return "overview";
-  const id = window.location.hash.replace("#", "");
-  return pageIds.has(id) ? id : "overview";
+function locationState() {
+  if (typeof window === "undefined") return { page: "overview", applicationId: "" };
+  const hash = window.location.hash.replace(/^#/, "");
+  const appGroupsMatch = hash.match(/^applications\/([^/]+)\/groups$/);
+  if (appGroupsMatch) {
+    return {
+      page: "application-groups",
+      applicationId: decodeURIComponent(appGroupsMatch[1]),
+    };
+  }
+  return pageIds.has(hash) && hash !== "application-groups"
+    ? { page: hash, applicationId: "" }
+    : { page: "overview", applicationId: "" };
 }
 
 function syncPageFromHistory() {
-  activePage.value = pageFromLocation();
+  const state = locationState();
+  activePage.value = state.page;
+  activeApplicationId.value = state.applicationId;
 }
 
 function switchPage(id) {
   activePage.value = id;
+  activeApplicationId.value = "";
   if (typeof window !== "undefined" && window.location.hash !== `#${id}`) {
     window.history.pushState({}, "", `#${id}`);
   }
 }
 
+function openApplicationGroups(application) {
+  activePage.value = "application-groups";
+  activeApplicationId.value = application.id;
+  const targetHash = `#applications/${encodeURIComponent(application.id)}/groups`;
+  if (typeof window !== "undefined" && window.location.hash !== targetHash) {
+    window.history.pushState({}, "", targetHash);
+  }
+}
+
 onMounted(() => {
-  activePage.value = pageFromLocation();
+  syncPageFromHistory();
   window.addEventListener("popstate", syncPageFromHistory);
   window.addEventListener("hashchange", syncPageFromHistory);
 });
@@ -62,7 +106,7 @@ onUnmounted(() => {
   window.removeEventListener("hashchange", syncPageFromHistory);
 });
 
-defineEmits([
+const emit = defineEmits([
   "refresh",
   "logout",
   "create-application",
@@ -78,7 +122,7 @@ defineEmits([
   <div class="console-shell">
     <aside class="side-nav" aria-label="管理后台导航">
       <button type="button" class="side-nav-brand" @click="switchPage('overview')">
-        <span class="brand-mark">K</span>
+        <img class="brand-mark brand-logo" :src="logoUrl" alt="kMessage logo" />
         <span>
           <strong>kMessage</strong>
           <small>统一消息平台</small>
@@ -100,12 +144,15 @@ defineEmits([
       </nav>
 
       <div class="side-nav-footer">
-        <span class="admin-avatar">A</span>
+        <span class="admin-avatar">{{ adminInitial }}</span>
         <span>
           <strong>管理员控制台</strong>
-          <small>Session 登录</small>
+          <small>{{ adminUsername || "未登录" }}</small>
         </span>
       </div>
+      <button type="button" class="side-nav-footer-action" @click="changePasswordOpen = true">
+        修改密码
+      </button>
     </aside>
 
     <div class="console-main">
@@ -180,8 +227,26 @@ defineEmits([
               :channels="channels"
               :channel-label="channelLabel"
               @create="$emit('create-application')"
+              @manage-groups="openApplicationGroups"
               @rotate="$emit('rotate-application', $event)"
               @delete="$emit('delete-application', $event)"
+            />
+          </section>
+
+          <section v-else-if="activePage === 'application-groups'" class="workspace-page">
+            <UserGroupPanel
+              v-if="activeApplication"
+              :key="activeApplication.id"
+              :application="activeApplication"
+              :channels="channels"
+              :channel-label="channelLabel"
+              :reload-key="userImportRevision"
+              @back="switchPage('applications')"
+            />
+            <KEmptyState
+              v-else
+              title="未找到应用"
+              description="该应用不存在或已被删除，请返回应用列表重新选择。"
             />
           </section>
 
@@ -199,15 +264,6 @@ defineEmits([
               @users-imported="userImportRevision += 1"
             />
           </section>
-
-          <section v-else class="workspace-page">
-            <UserGroupPanel
-              :applications="applications"
-              :channels="channels"
-              :channel-label="channelLabel"
-              :reload-key="userImportRevision"
-            />
-          </section>
         </div>
       </main>
     </div>
@@ -220,8 +276,13 @@ defineEmits([
         :class="{ active: activePage === page.id }"
         @click="switchPage(page.id)"
       >
-        {{ page.id === "user-groups" ? "分组" : page.label }}
+        {{ page.label }}
       </button>
     </nav>
+
+    <ChangePasswordDialog
+      v-model:open="changePasswordOpen"
+      :on-submit="onChangePassword"
+    />
   </div>
 </template>

@@ -77,13 +77,35 @@ watch(
   }
 );
 
+// Track node ids we have already seen so that re-renders (e.g. members injected
+// into the selected group, or a renamed group) do NOT clobber the user's manual
+// expand/collapse state. Each node can be expanded independently — expanding one
+// never collapses another.
+const seenIds = ref(new Set());
+
 watch(
   () => props.data,
   (nodes) => {
+    // Collect every expandable node with its depth so we can apply the default
+    // expand policy only to the right tier.
+    const expandable = new Map();
+    collectExpandable(nodes, expandable, 0);
+
     const next = new Set();
-    if (props.defaultExpandAll) collectExpandableIds(nodes, next);
-    else nodes.forEach((node) => node.children?.length && next.add(node.id));
+    expandable.forEach((info, id) => {
+      // Existing nodes keep whatever expand state the user left them in, so each
+      // node can be expanded/collapsed without affecting its siblings.
+      if (expandedKeys.value.has(id)) {
+        next.add(id);
+        return;
+      }
+      // Brand-new nodes inherit the default expand policy exactly once.
+      if (!seenIds.value.has(id) && shouldDefaultExpand(info)) {
+        next.add(id);
+      }
+    });
     expandedKeys.value = next;
+    seenIds.value = new Set(expandable.keys());
   },
   { immediate: true, deep: true }
 );
@@ -93,13 +115,21 @@ function toSelectionSet(value) {
   return value ? new Set([value]) : new Set();
 }
 
-function collectExpandableIds(nodes, out) {
+function collectExpandable(nodes, out, depth) {
   nodes.forEach((node) => {
     if (node.children?.length) {
-      out.add(node.id);
-      collectExpandableIds(node.children, out);
+      out.set(node.id, { depth, node });
+      collectExpandable(node.children, out, depth + 1);
     }
   });
+}
+
+// Default expand policy applied only to newly appeared nodes:
+//  - defaultExpandAll=true  -> every expandable node
+//  - defaultExpandAll=false -> only top-level (root) nodes with children
+function shouldDefaultExpand(info) {
+  if (props.defaultExpandAll) return true;
+  return info.depth === 0 && Boolean(info.node.children?.length);
 }
 
 function toggleExpand(id) {
