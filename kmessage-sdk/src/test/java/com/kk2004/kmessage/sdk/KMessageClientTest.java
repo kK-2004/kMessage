@@ -76,4 +76,21 @@ class KMessageClientTest {
         Assertions.assertTrue(requestBody.get().contains("\"message\":{\"type\":\"CARD\",\"card\":"));
         Assertions.assertTrue(requestBody.get().contains("\"content\":\"告警\""));
     }
+
+    @Test void sendToGroupOmittingChannelResolvesFromGroup() {
+        KMessageClient client = new KMessageClient("http://localhost:" + server.getAddress().getPort(), "app-key", "app-secret");
+        KMessageClient.MessageBatchResult batch = client.sendToGroup("g1", "hello-group", "idem-group-noid");
+        Assertions.assertEquals(2, batch.totalMessages());
+        // The 3-arg overload sends channelInstanceId as null so the server resolves it from the group.
+        Assertions.assertTrue(requestBody.get().contains("\"channelInstanceId\":null"));
+        Assertions.assertTrue(requestBody.get().contains("\"groupId\":\"g1\""));
+    }
+
+    @Test void sendToUserOmittingChannelResolvesFromUser() {
+        KMessageClient client = new KMessageClient("http://localhost:" + server.getAddress().getPort(), "app-key", "app-secret");
+        KMessageClient.MessageResult result = client.sendToUser("u1", "hello-user", "idem-user-noid");
+        Assertions.assertEquals("m1", result.id());
+        Assertions.assertTrue(requestBody.get().contains("\"channelInstanceId\":null"));
+        Assertions.assertTrue(requestBody.get().contains("\"userId\":\"u1\""));
+    }
 }

@@ -383,6 +383,31 @@ class PlatformIntegrationTest {
                 .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
         Assertions.assertTrue(mapper.readTree(userBody).get("data").has("status"));
         Assertions.assertEquals(3, tasks.count());
+
+        // channelInstanceId may be omitted for groupId/userId targets: the server resolves the
+        // channel from the group/user's own row. Both must still succeed and create tasks.
+        String groupNoChannel = mapper.writeValueAsString(Map.of(
+                "groupId", childId, "text", "hi-group-noid", "idempotencyKey", "grp-noid"));
+        String groupNoChannelBody = mvc.perform(post("/api/messages").header("X-App-Key", appKey).header("X-App-Secret", appSecret)
+                        .contentType(MediaType.APPLICATION_JSON).content(groupNoChannel))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        Assertions.assertEquals(2, mapper.readTree(groupNoChannelBody).get("data").get("totalMessages").asInt());
+        Assertions.assertEquals(5, tasks.count());
+
+        String userNoChannel = mapper.writeValueAsString(Map.of(
+                "userId", aliceId, "text", "hi-alice-noid", "idempotencyKey", "usr-noid"));
+        String userNoChannelBody = mvc.perform(post("/api/messages").header("X-App-Key", appKey).header("X-App-Secret", appSecret)
+                        .contentType(MediaType.APPLICATION_JSON).content(userNoChannel))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        Assertions.assertTrue(mapper.readTree(userNoChannelBody).get("data").has("status"));
+        Assertions.assertEquals(6, tasks.count());
+
+        // Raw target still requires channelInstanceId: omitting it must be rejected.
+        String targetNoChannel = mapper.writeValueAsString(Map.of(
+                "target", "123", "text", "hi-target-noid", "idempotencyKey", "tgt-noid"));
+        mvc.perform(post("/api/messages").header("X-App-Key", appKey).header("X-App-Secret", appSecret)
+                        .contentType(MediaType.APPLICATION_JSON).content(targetNoChannel))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(false));
     }
 
     @Test

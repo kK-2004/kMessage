@@ -304,6 +304,16 @@ public class UserGroupService {
         return result;
     }
 
+    /** Resolve a group to its owning channel instance id (for send requests that omit channelInstanceId). */
+    public String groupChannel(String groupId) {
+        return requireGroup(groupId).channelInstanceId;
+    }
+
+    /** Resolve a channel-level user to its owning channel instance id (for send requests that omit channelInstanceId). */
+    public String userChannel(String userId) {
+        return appUsers.findById(userId).orElseThrow(() -> new BusinessException(404, "用户不存在")).channelInstanceId;
+    }
+
     /** Resolve a channel-level user to its channel target id (for single-user send). */
     public AppUser resolveUser(String channelInstanceId, String userId) {
         AppUser u = appUsers.findById(userId).orElseThrow(() -> new BusinessException(404, "用户不存在"));

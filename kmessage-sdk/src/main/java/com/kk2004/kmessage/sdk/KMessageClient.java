@@ -35,6 +35,14 @@ public final class KMessageClient {
                 new SendTypedMessage(channelInstanceId, null, groupId, null, message, idempotencyKey, Map.of()),
                 MessageBatchResult.class);
     }
+    /** Send text to all members of a group, resolving the channel from the group (channelInstanceId optional). */
+    public MessageBatchResult sendToGroup(String groupId, String text, String idempotencyKey) {
+        return sendToGroup(null, groupId, text, idempotencyKey);
+    }
+    /** Send a typed message entity to all members of a group, resolving the channel from the group. */
+    public MessageBatchResult sendToGroup(String groupId, MessageEntity message, String idempotencyKey) {
+        return sendToGroup(null, groupId, message, idempotencyKey);
+    }
     /** Send to a single registered app-user (resolved by the server to the channel target). */
     public MessageResult sendToUser(String channelInstanceId, String userId, String text, String idempotencyKey) {
         return request("/api/messages","POST",
@@ -46,6 +54,14 @@ public final class KMessageClient {
         return request("/api/messages","POST",
                 new SendTypedMessage(channelInstanceId, null, null, userId, message, idempotencyKey, Map.of()),
                 MessageResult.class);
+    }
+    /** Send text to a single registered app-user, resolving the channel from the user (channelInstanceId optional). */
+    public MessageResult sendToUser(String userId, String text, String idempotencyKey) {
+        return sendToUser(null, userId, text, idempotencyKey);
+    }
+    /** Send a typed message entity to a single registered app-user, resolving the channel from the user. */
+    public MessageResult sendToUser(String userId, MessageEntity message, String idempotencyKey) {
+        return sendToUser(null, userId, message, idempotencyKey);
     }
     public JsonNode status(String messageId) { return request("/api/messages/"+messageId,"GET",null,JsonNode.class); }
     private <T> T request(String path,String method,Object body,Class<T> type) {

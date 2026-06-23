@@ -466,7 +466,7 @@ function filterUsers(list, keyword) {
       <section class="sub-section sdk-params-section">
         <div class="sub-section-head">
           <span class="section-title">SDK 调用参数</span>
-          <span class="hint">业务侧调用 <code>POST /api/messages</code> 所需参数；鉴权用 <code>X-App-Key</code> / <code>X-App-Secret</code> 请求头，调用体填入 <code>channelInstanceId</code> 与 <code>groupId</code>。</span>
+          <span class="hint">业务侧调用 <code>POST /api/messages</code> 所需参数；鉴权用 <code>X-App-Key</code> / <code>X-App-Secret</code> 请求头，调用体填入 <code>groupId</code>，<code>channelInstanceId</code> 可省略（由后端从分组反查）。</span>
         </div>
         <dl class="test-info">
           <dt>应用 ID (appId)</dt>

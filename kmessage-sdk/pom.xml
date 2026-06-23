@@ -6,7 +6,7 @@
 
     <groupId>com.kK-2004</groupId>
     <artifactId>kmessage-sdk</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.1</version>
     <packaging>jar</packaging>
     <name>kmessage-sdk</name>
     <description>Java client SDK for the kMessage multi-channel message delivery platform</description>

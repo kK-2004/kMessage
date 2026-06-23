@@ -35,18 +35,28 @@ public class MessageService {
     @Transactional
     public Object submit(SubmitRequest request) {
         Caller caller = CallerContext.require();
-        ChannelInstance channel = channels.findById(request.channelInstanceId()).orElseThrow(() -> new BusinessException(404, "渠道实例不存在"));
-        if (!channel.enabled) throw new BusinessException("渠道实例未启用");
-        if (!grants.existsByCallerIdAndChannelInstanceId(caller.id, channel.id)) throw new BusinessException(403, "调用方无权使用该渠道");
-        String extensions = json(request.extensions() == null ? Map.of() : request.extensions());
-        ResolvedMessageContent content = resolveContent(request);
-        String traceId = RequestContext.getTraceId();
 
         // Determine the set of (target, per-member idempotency suffix) to deliver to.
         // The three targeting modes are mutually exclusive.
         int modes = (isSet(request.target()) ? 1 : 0) + (isSet(request.groupId()) ? 1 : 0) + (isSet(request.userId()) ? 1 : 0);
         if (modes == 0) throw new BusinessException("必须指定 target、groupId 或 userId 之一");
         if (modes > 1) throw new BusinessException("target、groupId、userId 只能指定其一");
+
+        // Resolve the channel instance. channelInstanceId is optional when targeting a
+        // group or user (each carries its own channel via its UUID primary key); it is
+        // still required for raw target sends, whose target id is only unique per channel.
+        String channelId = request.channelInstanceId();
+        if (!isSet(channelId)) {
+            if (isSet(request.groupId())) channelId = userGroups.groupChannel(request.groupId());
+            else if (isSet(request.userId())) channelId = userGroups.userChannel(request.userId());
+            else throw new BusinessException("channelInstanceId 不能为空");
+        }
+        ChannelInstance channel = channels.findById(channelId).orElseThrow(() -> new BusinessException(404, "渠道实例不存在"));
+        if (!channel.enabled) throw new BusinessException("渠道实例未启用");
+        if (!grants.existsByCallerIdAndChannelInstanceId(caller.id, channel.id)) throw new BusinessException(403, "调用方无权使用该渠道");
+        String extensions = json(request.extensions() == null ? Map.of() : request.extensions());
+        ResolvedMessageContent content = resolveContent(request);
+        String traceId = RequestContext.getTraceId();
 
         List<Target> targets;
         if (isSet(request.groupId())) {
@@ -174,7 +184,8 @@ public class MessageService {
     public record SubmitRequest(String channelInstanceId, String target, String groupId, String userId,
                                 String text, MessagePayload message, String idempotencyKey, Map<String, Object> extensions) {
         public SubmitRequest {
-            if (channelInstanceId == null || channelInstanceId.isBlank()) throw new BusinessException("channelInstanceId 不能为空");
+            // channelInstanceId is optional when a groupId or userId is provided; the channel
+            // is resolved in MessageService.submit (and required there for raw target sends).
             if (message == null && (text == null || text.isBlank())) throw new BusinessException("text 不能为空");
             if (idempotencyKey == null || idempotencyKey.isBlank()) throw new BusinessException("idempotencyKey 不能为空");
         }

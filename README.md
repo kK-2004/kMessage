@@ -61,17 +61,17 @@ mvn -f kmessage-sdk/pom.xml install
 
 ```java
 KMessageClient client = new KMessageClient(endpoint, appKey, appSecret);
-var result = client.send(new KMessageClient.SendMessage(
-        channelInstanceId, target, "hello", idempotencyKey, Map.of()));
 
-var textResult = client.send(
-        channelInstanceId,
-        target,
+// 发送到分组：groupId 已自带渠道归属，channelInstanceId 可省略。
+var groupResult = client.sendToGroup(groupId, "分组通知", "idem-group-1");
+
+// 发送到单用户：userId 同样自带渠道归属，channelInstanceId 可省略。
+var textResult = client.sendToUser(
+        userId,
         new KMessageClient.NormalMessage("普通通知"),
         "idem-text-1");
 
 var cardResult = client.sendToUser(
-        channelInstanceId,
         userId,
         new KMessageClient.CardMessage(Map.of(
                 "config", Map.of("wide_screen_mode", true),
@@ -82,6 +82,10 @@ var cardResult = client.sendToUser(
                         "tag", "div",
                         "text", Map.of("tag", "lark_md", "content", "**状态**：成功"))))),
         "idem-card-1");
+
+// 直接发送到原始渠道目标（如 chat_id / open_id）：channelInstanceId 仍需显式传入。
+var result = client.send(new KMessageClient.SendMessage(
+        channelInstanceId, target, "hello", idempotencyKey, Map.of()));
 ```
 
 ## 构建
